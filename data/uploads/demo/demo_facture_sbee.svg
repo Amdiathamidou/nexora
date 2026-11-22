@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123" viewBox="0 0 794 1123">
+  <rect width="794" height="1123" fill="#ffffff"/>
+  <rect x="48" y="48" width="698" height="1027" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="48" y="48" width="698" height="104" fill="#0f172a"/>
+  <text x="80" y="96" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff">SBEE Bénin — Direction Grands Comptes</text>
+  <text x="80" y="124" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">DOCUMENT DE DÉMONSTRATION NEXORA · RÉF. EXTERNE : SBEE-GC-2026-4412</text>
+  <text x="80" y="200" font-family="Arial, sans-serif" font-size="13" fill="#475569">Cotonou, République du Bénin</text>
+  <text x="80" y="248" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#0f172a">Objet : Facture trimestrielle énergie &amp; maintenance réseau N° F-2026-4412</text>
+  <line x1="80" y1="268" x2="714" y2="268" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="80" y="310" font-family="Arial, sans-serif" font-size="14" fill="#1e293b">Facture adressée à : NEXORA DEMO GROUP SA, Boulevard de la Marina, Cotonou.</text>
+  <text x="80" y="342" font-family="Arial, sans-serif" font-size="14" fill="#1e293b">Montant TTC exigible : 1 485 000 FCFA.</text>
+  <text x="80" y="374" font-family="Arial, sans-serif" font-size="14" fill="#1e293b">Période facturée : Août – Octobre 2026.</text>
+  <text x="80" y="406" font-family="Arial, sans-serif" font-size="14" fill="#1e293b">Date limite de règlement : 25 novembre 2026.</text>
+  <text x="80" y="438" font-family="Arial, sans-serif" font-size="14" fill="#1e293b">Merci de transmettre l’attestation de virement au service recouvrement.</text>
+  <rect x="500" y="880" width="200" height="86" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="4 4"/>
+  <text x="520" y="914" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#334155">CACHET / SIGNATURE</text>
+  <text x="520" y="938" font-family="Arial, sans-serif" font-size="12" fill="#0f172a">SBEE Bénin — Direction Grands Comptes</text>
+  <text x="80" y="1040" font-family="Arial, sans-serif" font-size="11" fill="#64748b">Document fictif généré pour l'environnement de démonstration NEXORA DEMO GROUP (Cotonou, Bénin).</text>
+</svg>

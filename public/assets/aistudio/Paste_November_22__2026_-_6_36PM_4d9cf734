@@ -1,0 +1,1519 @@
+# NEXORA
+## CAHIER DES CHARGES OFFICIEL — VERSION FINALE
+### Spécifications fonctionnelles, techniques, métier et UI/UX
+
+**Document de référence destiné à Google AI Studio**  
+**Projet :** NEXORA — Plateforme intelligente de gestion du courrier et des circuits administratifs  
+**Version :** 3.0 — Cahier des charges consolidé  
+**Environnement de démonstration :** Cotonou, Bénin
+
+---
+
+# 1. PRÉSENTATION GÉNÉRALE DU PROJET
+
+## 1.1. Présentation
+
+NEXORA est une plateforme SaaS professionnelle destinée à la gestion numérique des courriers, documents administratifs, correspondances internes et circuits de validation au sein des entreprises, institutions, administrations et organisations.
+
+La plateforme doit permettre à chaque entreprise de centraliser ses courriers, organiser leur traitement, suivre leur évolution, automatiser les circuits de transmission et de validation, gérer les documents et disposer d'une traçabilité complète.
+
+NEXORA doit également intégrer une intelligence artificielle capable de lire les courriers importés sous forme de PDF ou d'image, d'en extraire automatiquement les informations importantes, de préremplir les formulaires d'enregistrement et de produire un résumé exploitable.
+
+L'application doit être conçue comme un véritable logiciel professionnel exploitable en production, et non comme une simple maquette visuelle.
+
+## 1.2. Objectifs principaux
+
+- Dématérialiser la gestion du courrier.
+- Centraliser les courriers entrants, sortants et internes.
+- Réduire les délais de traitement.
+- Automatiser la circulation des documents entre les services.
+- Organiser les circuits de validation et de signature.
+- Faciliter le travail du secrétariat.
+- Permettre aux responsables de suivre leurs équipes.
+- Donner au Président une vision stratégique de l'activité.
+- Utiliser l'intelligence artificielle pour faciliter l'enregistrement et l'analyse des courriers.
+- Garantir la traçabilité de chaque action.
+- Sécuriser les documents et les informations.
+- Fournir des statistiques et des rapports fiables.
+
+# 2. ARCHITECTURE GÉNÉRALE DE LA PLATEFORME
+
+NEXORA doit être organisé autour de trois espaces distincts.
+
+## 2.1. Site public
+
+Le site public présente NEXORA aux entreprises et permet notamment :
+
+- De découvrir les fonctionnalités.
+- De consulter les offres et abonnements.
+- De créer un compte entreprise.
+- De se connecter.
+- De contacter l'équipe commerciale ou le support.
+- De consulter les conditions d'utilisation et la politique de confidentialité.
+
+## 2.2. Espace de travail des entreprises
+
+Chaque entreprise possède son propre environnement sécurisé.
+
+Les données d'une entreprise ne doivent jamais être accessibles à une autre entreprise.
+
+Chaque espace comprend :
+- Un tableau de bord adapté au rôle connecté.
+- Un module de gestion du courrier.
+- Un module de gestion des documents.
+- Un module de circuits administratifs.
+- Un espace de gestion des utilisateurs.
+- Un espace de gestion des services.
+- Un module de notifications.
+- Un espace de rapports et statistiques.
+- Un module de paramétrage.
+- Un espace d'archivage.
+
+## 2.3. Administration générale de NEXORA
+
+Un espace Super Admin indépendant doit permettre à l'équipe qui exploite NEXORA de gérer la plateforme.
+
+Fonctionnalités :
+- Gestion des entreprises inscrites.
+- Consultation des informations des entreprises.
+- Suivi des périodes d'essai.
+- Gestion des abonnements.
+- Activation, suspension ou désactivation d'un compte.
+- Consultation des statistiques globales.
+- Gestion des offres et tarifs.
+- Suivi des paiements lorsque le module de paiement est intégré.
+- Gestion du support.
+- Consultation des journaux techniques et événements nécessaires à l'administration.
+
+Le Super Admin de NEXORA ne doit pas être confondu avec l'Admin d'une entreprise cliente.
+
+# 3. INSCRIPTION DES ENTREPRISES ET ABONNEMENTS
+
+## 3.1. Création d'un compte entreprise
+
+L'inscription doit permettre de créer un espace de travail complet.
+
+Informations de l'entreprise :
+- Dénomination sociale.
+- Nom commercial.
+- Secteur d'activité.
+- Forme juridique.
+- Pays.
+- Ville.
+- Adresse.
+- Téléphone.
+- Adresse e-mail professionnelle.
+- Site internet, si disponible.
+- Identifiant fiscal ou numéro d'enregistrement, si applicable.
+- Logo de l'entreprise.
+
+Informations du premier utilisateur :
+- Nom et prénom.
+- Fonction.
+- Adresse e-mail.
+- Téléphone.
+- Mot de passe.
+- Confirmation du mot de passe.
+
+À la validation de l'inscription :
+1. L'entreprise est créée.
+2. Son espace de travail est initialisé.
+3. Le premier utilisateur devient automatiquement **Admin**.
+4. Les paramètres de base sont créés.
+5. Une période d'essai gratuit de 14 jours commence.
+6. L'Admin accède à son tableau de bord.
+
+## 3.2. Période d'essai
+
+Chaque nouvelle entreprise bénéficie de 14 jours d'essai gratuit.
+
+L'application doit :
+- Afficher le nombre de jours restants.
+- Notifier l'Admin avant la fin de la période.
+- Permettre la souscription à un abonnement.
+- Gérer les entreprises dont la période d'essai est terminée.
+- Préserver les données de l'entreprise selon les règles de conservation définies.
+- Éviter toute suppression automatique non autorisée des courriers et documents.
+
+## 3.3. Abonnements
+
+Prévoir une architecture permettant de gérer plusieurs formules.
+
+Chaque formule peut définir :
+- Le nombre d'utilisateurs.
+- Le volume de stockage.
+- Le nombre de courriers traités.
+- Les fonctionnalités disponibles.
+- Les fonctionnalités d'intelligence artificielle.
+- Les limites d'utilisation.
+- La périodicité de facturation.
+
+L'intégration d'un système de paiement doit être prévue de manière évolutive. Ne pas simuler un paiement comme s'il avait réellement été effectué.
+
+# 4. RÔLES, UTILISATEURS ET PERMISSIONS
+
+NEXORA possède quatre rôles principaux.
+
+## 4.1. Admin
+
+Le premier utilisateur inscrit pour une entreprise devient automatiquement Admin.
+
+L'Admin est responsable de la configuration générale de son espace.
+
+Il peut :
+- Ajouter, modifier et désactiver des utilisateurs.
+- Attribuer les rôles.
+- Gérer les services.
+- Affecter les utilisateurs aux services.
+- Définir les permissions.
+- Configurer les circuits de traitement.
+- Définir les règles de référence des courriers.
+- Configurer les paramètres de l'entreprise.
+- Consulter les statistiques générales.
+- Consulter les journaux d'activité.
+- Gérer les paramètres de l'abonnement.
+
+L'Admin ne doit pas nécessairement intervenir dans tous les circuits de courrier.
+
+## 4.2. Responsable
+
+Le Responsable dirige un service ou une unité administrative.
+
+Il peut :
+- Consulter les courriers transmis à son service.
+- Recevoir les dossiers à traiter.
+- Affecter les courriers aux agents.
+- Fixer des délais de traitement.
+- Suivre l'avancement des tâches.
+- Examiner le travail des agents.
+- Valider ou rejeter un travail.
+- Demander des corrections.
+- Transmettre un dossier à l'étape suivante.
+- Consulter les statistiques de son service.
+
+Il ne peut pas modifier les paramètres généraux de l'entreprise sans permission.
+
+## 4.3. Agent
+
+L'Agent est chargé du traitement opérationnel des courriers.
+
+Il peut, selon ses permissions :
+- Consulter les courriers qui lui sont affectés.
+- Lire les documents.
+- Télécharger les pièces autorisées.
+- Ajouter des observations.
+- Préparer une réponse.
+- Rédiger un projet de courrier.
+- Joindre des documents.
+- Transmettre le travail à son Responsable.
+- Signaler une difficulté.
+- Consulter ses tâches et échéances.
+
+Un Agent ne doit pas pouvoir valider lui-même une étape qui relève de son Responsable ou du Président, sauf délégation explicitement autorisée.
+
+## 4.4. Président
+
+Le Président dispose d'un tableau de bord exécutif spécifique.
+
+Il peut :
+- Consulter les courriers nécessitant son intervention.
+- Consulter les courriers prioritaires.
+- Examiner les documents soumis à sa validation.
+- Donner un avis.
+- Approuver ou rejeter une proposition.
+- Demander une correction.
+- Signer ou valider un document lorsque le circuit l'exige.
+- Consulter les indicateurs stratégiques.
+- Suivre les retards et les dossiers sensibles.
+- Consulter l'historique des décisions.
+
+**Règle importante :** le Président ne doit pas intervenir automatiquement dans tous les courriers. Son intervention dépend du circuit configuré, de la nature du courrier, de son importance ou des règles de délégation.
+
+## 4.5. Le Secrétariat : une fonction opérationnelle
+
+Le Secrétariat n'est pas un cinquième rôle obligatoire.
+
+Il s'agit d'un service ou d'une fonction exercée par des utilisateurs auxquels l'Admin attribue les permissions correspondantes.
+
+Un Agent ou un utilisateur affecté au Secrétariat peut disposer de permissions spécifiques :
+- Réception des courriers.
+- Enregistrement.
+- Numérisation.
+- Analyse par IA.
+- Orientation.
+- Suivi des retours.
+- Contrôle documentaire final.
+- Préparation de l'expédition.
+- Enregistrement de la preuve d'envoi.
+- Clôture.
+- Archivage.
+
+Les permissions doivent être configurables et cumulables selon les responsabilités réelles.
+
+# 5. GESTION DES SERVICES ET ORGANISATION
+
+L'Admin doit pouvoir créer librement les services de son entreprise.
+
+Exemples :
+- Présidence.
+- Direction générale.
+- Secrétariat.
+- Ressources humaines.
+- Direction financière.
+- Service juridique.
+- Communication.
+- Informatique.
+- Administration.
+
+Chaque service possède :
+- Un nom.
+- Une description.
+- Un Responsable.
+- Des agents.
+- Des permissions.
+- Des règles de réception.
+- Des circuits auxquels il participe.
+
+Un utilisateur peut appartenir à un ou plusieurs services selon les règles de l'entreprise.
+
+# 6. GESTION DES COURRIERS
+
+Trois grandes catégories doivent être prises en charge.
+
+## 6.1. Courriers entrants
+
+Les courriers entrants sont les documents reçus par l'entreprise depuis l'extérieur.
+
+Exemples :
+- Lettres administratives.
+- Demandes officielles.
+- Invitations.
+- Factures.
+- Réclamations.
+- Convocations.
+- Courriers de partenaires.
+- Demandes de partenariat.
+- Correspondances institutionnelles.
+
+Informations à enregistrer :
+- Référence interne.
+- Expéditeur.
+- Organisation expéditrice.
+- Destinataire.
+- Date du courrier.
+- Date de réception.
+- Référence externe.
+- Objet.
+- Description.
+- Catégorie.
+- Niveau de priorité.
+- Date limite de traitement.
+- Service concerné.
+- Responsable du traitement.
+- Pièces jointes.
+- Statut.
+- Historique.
+
+## 6.2. Courriers sortants
+
+Les courriers sortants sont les documents produits par l'entreprise et destinés à des personnes ou organisations extérieures.
+
+Fonctionnalités :
+- Création d'un courrier.
+- Rédaction du contenu.
+- Ajout de pièces jointes.
+- Choix du destinataire.
+- Sélection du service émetteur.
+- Définition du circuit de validation.
+- Contrôle.
+- Validation.
+- Signature si nécessaire.
+- Transmission au Secrétariat.
+- Expédition.
+- Enregistrement de la preuve d'envoi.
+- Archivage.
+
+## 6.3. Courriers internes
+
+Les courriers internes circulent entre les services de la même entreprise.
+
+Fonctionnalités :
+- Création d'une note interne.
+- Choix du service destinataire.
+- Choix du niveau de priorité.
+- Définition d'une échéance.
+- Transmission.
+- Accusé de réception.
+- Commentaires.
+- Suivi du traitement.
+- Clôture et archivage.
+
+# 7. CIRCUITS ADMINISTRATIFS ET WORKFLOW
+
+Ce module constitue le cœur métier de NEXORA.
+
+Le système doit permettre de configurer des circuits adaptés à chaque organisation.
+
+## 7.1. Circuit général d'un courrier entrant
+
+Le circuit de référence est le suivant :
+
+**Étape 1 — Secrétariat : réception et enregistrement**
+- Réception physique ou numérique.
+- Importation du document.
+- Numérisation si nécessaire.
+- Analyse par IA.
+- Vérification des informations extraites.
+- Enregistrement officiel.
+- Attribution d'une référence interne.
+
+**Étape 2 — Orientation**
+Le courrier est orienté vers le Président, la Direction ou directement vers un service autorisé, selon les règles définies.
+
+**Étape 3 — Responsable**
+Le Responsable reçoit le courrier, examine son contenu et l'affecte à un Agent si nécessaire.
+
+**Étape 4 — Agent**
+L'Agent réalise le travail demandé, prépare une réponse ou produit les documents nécessaires.
+
+**Étape 5 — Responsable : contrôle**
+Le Responsable examine le travail effectué.
+Il peut :
+- Valider.
+- Rejeter avec motif.
+- Demander une correction.
+- Transmettre à l'étape suivante.
+
+**Étape 6 — Président, si nécessaire**
+Le Président intervient uniquement lorsque le circuit prévoit une validation, une décision ou une signature présidentielle.
+
+**Étape 7 — Retour obligatoire au Secrétariat**
+Après le traitement et les validations requises, le dossier revient obligatoirement au Secrétariat.
+
+**Étape 8 — Contrôle final**
+Le Secrétariat vérifie :
+- La présence des documents.
+- La cohérence des pièces.
+- Les validations requises.
+- La version définitive du document.
+- Les informations nécessaires à l'expédition.
+
+**Étape 9 — Expédition et archivage**
+Si une réponse est nécessaire, le Secrétariat organise l'expédition et enregistre la preuve d'envoi. Le dossier est ensuite clôturé et archivé.
+
+Si aucune réponse n'est nécessaire, le dossier est classé selon la procédure prévue et archivé.
+
+**Règle non négociable : aucun courrier entrant traité ne doit contourner le retour final au Secrétariat.**
+
+## 7.2. Circuit des courriers sortants
+
+Le circuit peut être configuré comme suit :
+
+Création du courrier → Contrôle du Responsable → Validation hiérarchique → Signature si nécessaire → Retour au Secrétariat → Expédition → Preuve d'envoi → Archivage.
+
+## 7.3. Circuit des courriers internes
+
+Création → Validation éventuelle → Transmission au service destinataire → Traitement → Retour ou clôture selon le circuit → Archivage.
+
+## 7.4. Circuits personnalisables
+
+L'Admin doit pouvoir créer plusieurs circuits.
+
+Chaque circuit comprend :
+- Un nom.
+- Une description.
+- Une catégorie de courrier.
+- Un déclencheur.
+- Des étapes.
+- Des rôles ou utilisateurs autorisés.
+- Des services concernés.
+- Des règles de validation.
+- Des délais.
+- Des conditions de passage.
+- Des règles de retour.
+- Des notifications.
+
+## 7.5. Circuits séquentiels et parallèles
+
+Le moteur doit gérer :
+
+**Circuit séquentiel :** chaque étape attend la validation de l'étape précédente.
+
+**Circuit parallèle :** plusieurs services ou utilisateurs peuvent recevoir simultanément une tâche ou donner leur avis.
+
+Le système doit pouvoir attendre :
+- Toutes les validations.
+- Une validation parmi plusieurs.
+- Un nombre minimal de validations.
+- Une décision d'un utilisateur désigné.
+
+Les validations, consultations et simples notifications doivent être distinguées.
+
+## 7.6. Gestion des décisions
+
+Chaque étape doit pouvoir produire une décision :
+- Approuver.
+- Rejeter.
+- Demander une correction.
+- Transmettre.
+- Réorienter.
+- Suspendre.
+- Reprendre.
+- Classer sans suite.
+
+Toute décision importante doit comporter :
+- L'utilisateur responsable.
+- La date et l'heure.
+- Le motif, lorsque nécessaire.
+- Les observations.
+- L'étape concernée.
+- L'état précédent.
+- Le nouvel état.
+
+Un courrier classé sans suite doit tout de même respecter les règles de retour au Secrétariat et d'archivage.
+
+## 7.7. Gestion des versions des circuits
+
+Les circuits doivent être versionnés.
+
+Une modification de circuit ne doit pas modifier les dossiers déjà engagés dans un ancien circuit.
+
+Chaque courrier doit conserver :
+- La version du circuit utilisée.
+- Les étapes prévues au démarrage.
+- Les décisions déjà prises.
+- L'historique de son parcours.
+
+# 8. MOTEUR DE TÂCHES ET SUIVI DES TRAITEMENTS
+
+Chaque étape de workflow peut générer une tâche.
+
+Une tâche contient :
+- Un titre.
+- Une description.
+- Un courrier associé.
+- Un utilisateur ou service responsable.
+- Une date de création.
+- Une échéance.
+- Une priorité.
+- Un statut.
+- Des commentaires.
+- Des pièces jointes.
+- Un historique.
+
+Statuts possibles :
+- À traiter.
+- En cours.
+- En attente.
+- Transmise.
+- À corriger.
+- Validée.
+- Rejetée.
+- Terminée.
+- Annulée.
+
+Fonctionnalités :
+- Affectation.
+- Réaffectation autorisée.
+- Transfert.
+- Demande de correction.
+- Suspension.
+- Reprise.
+- Relance.
+- Signalement d'un retard.
+- Historique des interventions.
+
+Les retards doivent être calculés à partir des échéances et des règles de calendrier définies.
+
+# 9. INTELLIGENCE ARTIFICIELLE ET NUMÉRISATION INTELLIGENTE
+
+## 9.1. Objectif
+
+NEXORA doit intégrer une intelligence artificielle capable d'analyser automatiquement les courriers reçus sous forme de fichiers PDF ou d'images.
+
+Cette fonctionnalité est essentielle au fonctionnement de l'application.
+
+L'objectif est de permettre au Secrétariat de déposer un document et d'obtenir automatiquement :
+1. Le texte détecté dans le document.
+2. Les informations administratives extraites.
+3. Un formulaire d'enregistrement prérempli.
+4. Un résumé clair du courrier.
+5. Des suggestions de catégorie, priorité et orientation.
+
+L'IA assiste l'utilisateur, mais ne remplace pas sa validation.
+
+## 9.2. Formats acceptés
+
+Le module doit accepter :
+- PDF contenant du texte.
+- PDF scannés.
+- Documents PDF multipages.
+- JPG.
+- JPEG.
+- PNG.
+- Photos prises avec un smartphone.
+
+Prévoir une architecture permettant d'ajouter ultérieurement d'autres formats.
+
+## 9.3. Préparation des documents
+
+Avant l'analyse, le système doit pouvoir :
+- Détecter l'orientation des pages.
+- Corriger une rotation.
+- Améliorer la lisibilité lorsque possible.
+- Détecter les pages multiples.
+- Identifier les documents flous.
+- Préparer les images pour l'OCR.
+
+Le fichier original doit toujours être conservé.
+
+## 9.4. Reconnaissance de texte OCR
+
+Le système doit extraire le texte présent dans le document.
+
+L'OCR doit fonctionner sur :
+- Les documents imprimés.
+- Les documents scannés.
+- Les photographies de courriers.
+- Les documents multipages.
+
+La reconnaissance de l'écriture manuscrite peut être prise en charge lorsque la qualité du document et le service utilisé le permettent. Le système doit signaler les résultats incertains.
+
+## 9.5. Extraction automatique des informations
+
+L'IA doit rechercher notamment :
+
+- Nom de l'expéditeur.
+- Organisation expéditrice.
+- Nom du destinataire.
+- Organisation destinataire.
+- Date du courrier.
+- Date de réception, si connue par le système.
+- Référence externe.
+- Objet.
+- Nature du courrier.
+- Catégorie.
+- Personnes mentionnées.
+- Services concernés.
+- Date limite ou échéance mentionnée.
+- Demande formulée.
+- Actions attendues.
+- Pièces jointes mentionnées.
+- Références administratives importantes.
+
+Les informations non détectées doivent rester vides et être identifiées comme « Non détecté ».
+
+**L'IA ne doit jamais inventer une information absente du document.**
+
+## 9.6. Préremplissage du formulaire
+
+Après l'analyse, NEXORA doit afficher le formulaire d'enregistrement avec les champs préremplis.
+
+L'utilisateur doit pouvoir :
+- Vérifier les informations.
+- Modifier les champs.
+- Supprimer une information incorrecte.
+- Compléter les champs manquants.
+- Relancer l'analyse.
+- Valider l'enregistrement.
+
+Aucune information extraite par l'IA ne doit être considérée comme officiellement enregistrée sans validation humaine.
+
+## 9.7. Génération automatique d'un résumé
+
+L'IA doit produire un résumé du courrier.
+
+Prévoir deux formats :
+
+**Résumé court :**
+- Trois à cinq lignes.
+- Présentation rapide du sujet.
+- Demande principale.
+- Information importante.
+- Action attendue, si identifiable.
+
+**Résumé détaillé :**
+- Contexte.
+- Objet de la correspondance.
+- Demande formulée.
+- Informations importantes.
+- Personnes ou organisations concernées.
+- Actions attendues.
+- Délais mentionnés.
+- Points nécessitant une attention particulière.
+
+Le résumé doit rester fidèle au contenu du document.
+
+## 9.8. Suggestions intelligentes
+
+L'IA peut suggérer :
+- Une catégorie.
+- Un niveau de priorité.
+- Un service compétent.
+- Un circuit de traitement.
+- Une échéance à surveiller.
+- Les points nécessitant une attention particulière.
+
+Ces propositions sont des recommandations, pas des décisions automatiques.
+
+L'utilisateur habilité doit confirmer l'orientation et le circuit.
+
+## 9.9. Interface d'analyse IA
+
+L'écran doit présenter deux zones principales.
+
+**À gauche : document original**
+- Aperçu du PDF ou de l'image.
+- Navigation entre les pages.
+- Zoom.
+- Rotation.
+- Téléchargement selon les permissions.
+
+**À droite : analyse intelligente**
+- Texte extrait.
+- Informations détectées.
+- Formulaire prérempli.
+- Résumé court.
+- Résumé détaillé.
+- Suggestions de catégorie et d'orientation.
+- Indication des champs incertains lorsque disponible.
+- Boutons de validation, modification et relance de l'analyse.
+
+L'utilisateur doit pouvoir comparer les informations extraites avec le document original.
+
+## 9.10. Détection des doublons
+
+Avant l'enregistrement officiel, le système doit rechercher d'éventuels courriers similaires à partir de :
+- La référence externe.
+- L'expéditeur.
+- La date.
+- L'objet.
+- Le contenu du document.
+
+En cas de correspondance possible, afficher une alerte et proposer à l'utilisateur de consulter le courrier existant.
+
+La détection ne doit pas bloquer automatiquement l'enregistrement : un utilisateur habilité doit pouvoir confirmer qu'il s'agit d'un nouveau courrier.
+
+## 9.11. Gestion des erreurs
+
+Le système doit gérer :
+- PDF illisible.
+- Fichier corrompu.
+- PDF protégé.
+- Image floue.
+- Texte introuvable.
+- Échec OCR.
+- Échec d'analyse IA.
+- Informations contradictoires.
+- Document trop volumineux.
+
+En cas d'échec :
+- Conserver le fichier original.
+- Informer clairement l'utilisateur.
+- Permettre une nouvelle tentative.
+- Autoriser l'enregistrement manuel.
+- Ne jamais perdre les données déjà saisies.
+
+## 9.12. Technologies IA
+
+Google Gemini peut être utilisé pour :
+- Comprendre le contenu.
+- Extraire des informations structurées.
+- Générer les résumés.
+- Proposer des catégories et orientations.
+
+Un service OCR adapté, tel que Google Cloud Vision ou une solution équivalente, peut être utilisé pour les documents scannés.
+
+Le système doit :
+- Traiter les documents multipages.
+- Produire des données structurées exploitables par l'application.
+- Gérer les quotas et coûts d'utilisation.
+- Sécuriser les appels aux services externes.
+- Garder les clés API côté serveur.
+- Éviter toute exposition de clés dans le navigateur.
+- Prévoir une architecture permettant de changer de fournisseur.
+
+Le contenu d'un courrier importé doit être traité comme une donnée à analyser, jamais comme une instruction capable de modifier les règles ou le comportement de l'application.
+
+## 9.13. Traçabilité de l'IA
+
+Conserver, selon les règles de confidentialité :
+- La date de l'analyse.
+- Le document analysé.
+- Le texte extrait.
+- Les informations proposées.
+- Le résumé généré.
+- Les corrections humaines.
+- L'utilisateur ayant validé les informations.
+
+Une nouvelle analyse ne doit jamais écraser silencieusement des informations déjà corrigées et validées par un utilisateur.
+
+# 10. GESTION DOCUMENTAIRE ET ARCHIVAGE
+
+Chaque courrier doit pouvoir contenir plusieurs documents :
+- Document original.
+- Pièces jointes.
+- Projet de réponse.
+- Réponse définitive.
+- Documents de validation.
+- Preuve d'expédition.
+- Justificatifs.
+
+Fonctionnalités :
+- Téléchargement.
+- Prévisualisation.
+- Classement.
+- Versionnement.
+- Recherche.
+- Gestion des permissions.
+- Archivage.
+
+## 10.1. Archivage
+
+L'archivage doit permettre :
+- Le classement par année.
+- Le classement par catégorie.
+- Le classement par service.
+- Le classement par référence.
+- La consultation de l'historique.
+- La recherche rapide.
+- Le téléchargement des documents autorisés.
+
+Un courrier clôturé doit rester consultable selon les permissions.
+
+La suppression définitive doit être strictement contrôlée et tracée.
+
+# 11. RÉFÉRENCES ET IDENTIFICATION DES COURRIERS
+
+Chaque courrier doit posséder une référence interne unique.
+
+Exemples :
+- ARR-2026-0001 : courrier entrant.
+- DEP-2026-0001 : courrier sortant.
+- INT-2026-0001 : courrier interne.
+
+Le format doit être configurable par entreprise.
+
+Règles :
+- Une référence unique par courrier.
+- Numérotation automatique.
+- Gestion par année.
+- Aucune duplication.
+- Conservation de la référence dans l'historique.
+- Possibilité de rechercher un courrier par référence.
+
+# 12. SIGNATURES ET VALIDATIONS
+
+Le système doit distinguer :
+- Validation administrative.
+- Approbation.
+- Visa.
+- Signature visuelle.
+- Signature électronique juridiquement valable.
+
+Les circuits doivent pouvoir demander une ou plusieurs validations.
+
+L'application ne doit pas présenter une simple image de signature comme une signature électronique juridiquement certifiée.
+
+Prévoir une architecture permettant l'intégration future d'un prestataire de signature électronique adapté.
+
+# 13. TABLEAUX DE BORD
+
+Chaque rôle doit disposer d'un tableau de bord correspondant à ses responsabilités.
+
+## 13.1. Dashboard Admin
+
+Indicateurs :
+- Nombre total de courriers.
+- Courriers entrants.
+- Courriers sortants.
+- Courriers internes.
+- Courriers en cours.
+- Courriers en retard.
+- Courriers archivés.
+- Nombre d'utilisateurs.
+- Activité des services.
+- Volume de stockage.
+- Activité récente.
+
+Accès aux paramètres et à la gestion de l'entreprise.
+
+## 13.2. Dashboard Responsable
+
+Indicateurs :
+- Courriers reçus par son service.
+- Courriers à affecter.
+- Tâches des agents.
+- Courriers en cours.
+- Courriers en attente de contrôle.
+- Retards.
+- Dossiers urgents.
+- Performance du service.
+
+Actions rapides :
+- Affecter un courrier.
+- Consulter les dossiers.
+- Valider un travail.
+- Demander une correction.
+
+## 13.3. Dashboard Agent
+
+Indicateurs :
+- Mes tâches.
+- Mes courriers.
+- Tâches urgentes.
+- Tâches en retard.
+- Travaux à corriger.
+- Travaux terminés.
+
+Actions rapides :
+- Ouvrir une tâche.
+- Consulter un courrier.
+- Ajouter une observation.
+- Préparer une réponse.
+- Transmettre au Responsable.
+
+## 13.4. Dashboard Président
+
+Le dashboard Président doit être distinct et orienté vers la décision.
+
+Il doit afficher :
+- Courriers en attente de décision.
+- Courriers nécessitant une signature.
+- Courriers prioritaires.
+- Dossiers sensibles.
+- Décisions en retard.
+- Vue globale des courriers.
+- Indicateurs de performance.
+- Évolution de l'activité.
+- Répartition des courriers par service.
+- Historique des décisions.
+
+Le Président ne doit pas être submergé par les tâches opérationnelles qui ne nécessitent pas son intervention.
+
+## 13.5. Espace opérationnel du Secrétariat
+
+Le Secrétariat doit disposer d'un espace adapté à ses fonctions.
+
+Il doit afficher :
+- Courriers reçus aujourd'hui.
+- Courriers à enregistrer.
+- Documents à analyser par IA.
+- Courriers en attente d'orientation.
+- Courriers en attente de retour.
+- Dossiers retournés pour contrôle final.
+- Courriers à expédier.
+- Courriers à archiver.
+- Dossiers incomplets.
+
+Actions rapides :
+- Enregistrer un courrier.
+- Importer un PDF ou une image.
+- Lancer l'analyse IA.
+- Vérifier les données extraites.
+- Orienter un courrier.
+- Contrôler un dossier retourné.
+- Enregistrer une expédition.
+- Archiver un dossier.
+
+# 14. NOTIFICATIONS
+
+Le système doit notifier les utilisateurs concernés lors de :
+- Réception d'un nouveau courrier.
+- Affectation d'une tâche.
+- Transmission d'un dossier.
+- Demande de correction.
+- Validation ou rejet.
+- Approche d'une échéance.
+- Retard.
+- Retour au Secrétariat.
+- Demande de signature.
+- Expédition.
+- Archivage.
+
+Les notifications doivent être visibles dans l'application.
+
+Prévoir une architecture permettant d'ajouter les notifications par e-mail et d'autres canaux ultérieurement.
+
+Chaque notification doit être liée à l'élément concerné.
+
+# 15. RECHERCHE ET FILTRES
+
+Prévoir une recherche globale permettant de retrouver un courrier à partir de :
+- Référence.
+- Objet.
+- Expéditeur.
+- Destinataire.
+- Organisation.
+- Date.
+- Catégorie.
+- Service.
+- Responsable.
+- Statut.
+- Contenu textuel extrait par OCR.
+
+Filtres :
+- Courriers entrants.
+- Courriers sortants.
+- Courriers internes.
+- Courriers urgents.
+- Courriers en retard.
+- Courriers en attente.
+- Courriers archivés.
+- Période.
+- Service.
+- Type de document.
+
+Les résultats doivent respecter les permissions de l'utilisateur.
+
+# 16. RAPPORTS ET STATISTIQUES
+
+L'application doit générer des rapports sur :
+- Nombre de courriers reçus.
+- Nombre de courriers envoyés.
+- Nombre de courriers internes.
+- Délai moyen de traitement.
+- Courriers en retard.
+- Volume de courriers par service.
+- Activité des utilisateurs.
+- Taux de traitement.
+- Nombre de dossiers archivés.
+- Répartition des priorités.
+- Charge de travail des services.
+
+Prévoir :
+- Filtres par période.
+- Comparaison entre périodes.
+- Graphiques.
+- Tableaux détaillés.
+- Export PDF.
+- Export Excel ou CSV selon les possibilités techniques.
+
+Les statistiques doivent provenir des données réelles de l'application.
+
+# 17. INTERFACE UTILISATEUR ET EXPÉRIENCE UX/UI
+
+NEXORA doit posséder une interface moderne, élégante et professionnelle.
+
+L'apparence doit être comparable à celle d'un véritable logiciel SaaS premium destiné aux entreprises et institutions.
+
+## 17.1. Direction artistique
+
+Style souhaité :
+- Professionnel.
+- Moderne.
+- Épuré.
+- Élégant.
+- Lisible.
+- Cohérent.
+- Institutionnel sans être ancien.
+
+Éviter :
+- Les interfaces trop chargées.
+- Les couleurs excessives.
+- Les effets décoratifs inutiles.
+- Les tableaux illisibles.
+- Les pages vides.
+- Les composants incohérents.
+
+## 17.2. Identité visuelle
+
+Créer une identité visuelle cohérente pour NEXORA.
+
+Prévoir :
+- Logo NEXORA.
+- Palette de couleurs professionnelle.
+- Typographie moderne.
+- Icônes homogènes.
+- Boutons cohérents.
+- Cartes de statistiques.
+- Badges de statut.
+- Graphiques.
+- Tableaux.
+- Menus.
+- Fenêtres modales.
+
+## 17.3. Structure de l'interface
+
+Prévoir :
+- Menu latéral.
+- Barre supérieure.
+- Fil d'Ariane.
+- Zone principale de contenu.
+- Notifications.
+- Profil utilisateur.
+- Recherche globale.
+
+Le menu doit s'adapter au rôle et aux permissions.
+
+## 17.4. Pages essentielles
+
+Créer des interfaces complètes pour :
+- Site public.
+- Inscription entreprise.
+- Connexion.
+- Mot de passe oublié.
+- Tableau de bord Admin.
+- Tableau de bord Responsable.
+- Tableau de bord Agent.
+- Tableau de bord Président.
+- Espace Secrétariat.
+- Liste des courriers.
+- Détail d'un courrier.
+- Création d'un courrier.
+- Analyse IA d'un document.
+- Circuits administratifs.
+- Détail d'un workflow.
+- Gestion des tâches.
+- Utilisateurs.
+- Services.
+- Notifications.
+- Rapports.
+- Archives.
+- Paramètres.
+- Abonnements.
+
+## 17.5. Fiche détaillée d'un courrier
+
+La page de détail d'un courrier doit être particulièrement soignée.
+
+Elle doit présenter :
+- Référence.
+- Type.
+- Objet.
+- Expéditeur.
+- Destinataire.
+- Dates.
+- Priorité.
+- Statut.
+- Service concerné.
+- Responsable.
+- Résumé IA.
+- Documents associés.
+- Étapes du circuit.
+- Historique chronologique.
+- Décisions.
+- Commentaires.
+- Tâches.
+- Échéances.
+
+Prévoir une visualisation claire de l'avancement du circuit.
+
+## 17.6. Responsive design
+
+L'application doit être utilisable sur :
+- Ordinateur.
+- Tablette.
+- Smartphone.
+
+Les tableaux complexes peuvent adopter une présentation adaptée sur mobile.
+
+Prévoir un mode clair et un mode sombre.
+
+# 18. DONNÉES DE DÉMONSTRATION
+
+Créer un environnement de démonstration réaliste, cohérent et entièrement fonctionnel.
+
+Entreprise fictive :
+
+**NEXORA DEMO GROUP**  
+Cotonou, Bénin.
+
+Créer des utilisateurs fictifs :
+- Un Admin.
+- Un Président.
+- Plusieurs Responsables.
+- Plusieurs Agents.
+
+Créer des services :
+- Présidence.
+- Direction générale.
+- Secrétariat.
+- Ressources humaines.
+- Direction financière.
+- Service juridique.
+- Communication.
+
+Créer des courriers fictifs :
+- Lettre administrative.
+- Demande de partenariat.
+- Invitation officielle.
+- Facture.
+- Réclamation.
+- Demande d'information.
+- Note interne.
+- Courrier de réponse.
+
+Créer plusieurs circuits :
+- Courrier entrant simple.
+- Courrier entrant avec validation présidentielle.
+- Courrier entrant sans validation présidentielle.
+- Courrier nécessitant une réponse.
+- Courrier sortant.
+- Courrier interne.
+- Circuit avec validations parallèles.
+
+Créer des exemples de documents PDF et images fictifs pour tester la lecture OCR et l'analyse IA.
+
+Les données de démonstration doivent être identifiées comme fictives. Les résultats IA simulés doivent être clairement distingués des analyses réellement exécutées.
+
+# 19. MODÈLE DE DONNÉES ET ENTITÉS MÉTIER
+
+Concevoir une structure de données cohérente, normalisée et évolutive.
+
+Les principales entités à prévoir sont :
+
+- Entreprises.
+- Abonnements.
+- Utilisateurs.
+- Rôles.
+- Permissions.
+- Services.
+- Affectations des utilisateurs.
+- Courriers.
+- Types de courriers.
+- Catégories.
+- Documents.
+- Pièces jointes.
+- Analyses OCR.
+- Résultats IA.
+- Résumés.
+- Circuits.
+- Versions de circuits.
+- Étapes de circuits.
+- Instances de workflow.
+- Tâches.
+- Validations.
+- Décisions.
+- Commentaires.
+- Notifications.
+- Expéditions.
+- Preuves d'envoi.
+- Archives.
+- Journaux d'activité.
+
+Séparer clairement les statuts :
+- Statut du courrier.
+- Statut du workflow.
+- Statut de l'étape.
+- Statut de la tâche.
+- Statut de l'expédition.
+- Statut de l'archivage.
+
+Ne pas utiliser un seul champ de statut pour représenter toutes ces situations.
+
+Les relations doivent permettre de retrouver facilement le parcours complet d'un courrier.
+
+# 20. SÉCURITÉ ET CONFIDENTIALITÉ
+
+La sécurité doit être intégrée dès la conception.
+
+Exigences :
+- Authentification sécurisée.
+- Gestion des sessions.
+- Protection des mots de passe.
+- Contrôle d'accès basé sur les rôles et permissions.
+- Isolation stricte des données entre entreprises.
+- Protection des fichiers.
+- Vérification des types et tailles de fichiers.
+- Protection contre les accès non autorisés.
+- Validation des données côté serveur.
+- Protection contre les injections et attaques courantes.
+- Journalisation des actions sensibles.
+- Sauvegardes.
+- Gestion sécurisée des clés API.
+- Protection des documents confidentiels.
+
+Un utilisateur ne doit accéder qu'aux courriers, documents et fonctionnalités auxquels ses permissions lui donnent accès.
+
+Les documents envoyés à un service externe d'OCR ou d'IA doivent être traités conformément aux règles de confidentialité définies pour la plateforme.
+
+Prévoir une politique de conservation et de suppression des données.
+
+# 21. AUDIT ET TRAÇABILITÉ
+
+Chaque opération importante doit être enregistrée.
+
+Exemples :
+- Création d'un courrier.
+- Modification d'un courrier.
+- Consultation d'un document sensible lorsque nécessaire.
+- Affectation.
+- Transmission.
+- Validation.
+- Rejet.
+- Demande de correction.
+- Signature.
+- Expédition.
+- Archivage.
+- Modification d'un circuit.
+- Modification des permissions.
+
+Un journal d'audit doit contenir :
+- L'utilisateur.
+- L'action.
+- La date et l'heure.
+- L'élément concerné.
+- L'ancienne valeur lorsque pertinente.
+- La nouvelle valeur lorsque pertinente.
+- Le contexte nécessaire à la traçabilité.
+
+Les utilisateurs ordinaires ne doivent pas pouvoir modifier ou effacer les journaux d'audit.
+
+# 22. EXIGENCES TECHNIQUES ET ARCHITECTURE
+
+## 22.1. Liberté technologique encadrée
+
+**Ne pas imposer Laravel, PHP, MySQL ou une autre technologie particulière.**
+
+Google AI Studio doit examiner les capacités de son environnement et proposer une architecture adaptée.
+
+L'architecture choisie doit néanmoins respecter les exigences suivantes :
+- Application réellement fonctionnelle.
+- Frontend et backend clairement organisés.
+- Base de données persistante.
+- Authentification.
+- Gestion des permissions.
+- Stockage sécurisé des documents.
+- API structurées.
+- Gestion des erreurs.
+- Journalisation.
+- Séparation des entreprises.
+- Possibilité de déploiement.
+- Maintenance et évolutivité.
+
+Ne pas construire une application dont les données disparaissent au rechargement de la page.
+
+Ne pas utiliser uniquement des données fictives en mémoire pour simuler les fonctionnalités de production.
+
+## 22.2. Qualité du code
+
+Le code doit être :
+- Modulaire.
+- Lisible.
+- Maintenable.
+- Réutilisable.
+- Documenté lorsque nécessaire.
+- Organisé par domaines fonctionnels.
+
+Éviter les fichiers excessivement volumineux et les composants qui concentrent toute la logique métier.
+
+Séparer notamment :
+- Interface utilisateur.
+- Logique métier.
+- Accès aux données.
+- Authentification.
+- Gestion des permissions.
+- Workflows.
+- Gestion documentaire.
+- OCR et intelligence artificielle.
+- Notifications.
+- Rapports.
+
+## 22.3. Gestion des erreurs et robustesse
+
+Prévoir :
+- Des messages d'erreur compréhensibles.
+- Des validations de formulaires.
+- Des contrôles de cohérence.
+- Des états de chargement.
+- Des confirmations pour les actions sensibles.
+- Une gestion des échecs réseau.
+- Une reprise lorsque cela est possible.
+- Des transactions pour les opérations critiques.
+
+# 23. TESTS ET VALIDATION FONCTIONNELLE
+
+Avant de considérer NEXORA comme terminé, tester les scénarios suivants.
+
+## 23.1. Inscription et utilisateurs
+- Création d'une entreprise.
+- Création du premier Admin.
+- Attribution automatique du rôle Admin.
+- Démarrage de l'essai de 14 jours.
+- Ajout d'utilisateurs.
+- Affectation aux services.
+- Attribution des permissions.
+
+## 23.2. Gestion des courriers
+- Enregistrement manuel d'un courrier.
+- Importation d'un PDF.
+- Importation d'une image.
+- Création d'un courrier sortant.
+- Création d'un courrier interne.
+- Recherche par référence.
+- Consultation des documents.
+
+## 23.3. Intelligence artificielle
+- Lecture d'un PDF contenant du texte.
+- Lecture d'un PDF scanné.
+- Lecture d'une image.
+- Analyse d'un document multipage.
+- Extraction des informations.
+- Préremplissage du formulaire.
+- Génération du résumé.
+- Correction des informations.
+- Détection d'un doublon.
+- Gestion d'un document illisible.
+- Fonctionnement manuel lorsque l'IA échoue.
+
+## 23.4. Workflows
+- Circuit séquentiel.
+- Circuit parallèle.
+- Circuit avec validation présidentielle.
+- Circuit sans validation présidentielle.
+- Demande de correction.
+- Rejet.
+- Suspension.
+- Reprise.
+- Transfert.
+- Classement sans suite.
+- Retour obligatoire au Secrétariat.
+- Archivage final.
+
+## 23.5. Sécurité
+- Vérifier l'isolation des entreprises.
+- Vérifier les permissions.
+- Empêcher un Agent d'effectuer une validation non autorisée.
+- Empêcher un utilisateur de consulter les documents d'un autre service sans permission.
+- Vérifier la protection des fichiers.
+- Vérifier la traçabilité.
+
+## 23.6. Interface
+- Tester chaque rôle.
+- Tester les pages principales.
+- Tester les formulaires.
+- Tester les tableaux.
+- Tester les filtres.
+- Tester les notifications.
+- Tester sur ordinateur et mobile.
+
+# 24. CONDITIONS DE LIVRAISON
+
+Le projet ne doit pas être considéré comme terminé simplement parce que les pages sont visuellement construites.
+
+La livraison doit comprendre :
+- Une application réellement utilisable.
+- Une architecture cohérente.
+- Une base de données persistante.
+- Un système d'authentification opérationnel.
+- Les quatre rôles fonctionnels.
+- Une gestion réelle des permissions.
+- Les modules de courrier opérationnels.
+- Le moteur de workflow fonctionnel.
+- Le retour obligatoire au Secrétariat.
+- Le module OCR et IA opérationnel ou clairement identifié comme nécessitant une configuration externe.
+- Les tableaux de bord alimentés par des données réelles.
+- Les notifications fonctionnelles.
+- L'archivage.
+- Les rapports.
+- Les données de démonstration.
+- Les tests principaux.
+- Les instructions d'installation et de configuration.
+- Les variables d'environnement documentées.
+- Les instructions de déploiement.
+- Une documentation technique suffisante pour la maintenance.
+
+---
+
+# 25. INSTRUCTIONS FINALES À GOOGLE AI STUDIO
+
+Tu dois considérer ce document comme le cahier des charges de référence du projet NEXORA.
+
+Ta mission est de construire une véritable application professionnelle, cohérente et exploitable, en respectant les règles métier décrites ci-dessus.
+
+## PHASE 1 — AUDIT DE L'EXISTANT
+
+Si un projet ou du code existe déjà dans l'environnement :
+
+1. Examine l'ensemble du projet.
+2. Identifie les technologies utilisées.
+3. Analyse l'organisation du frontend et du backend.
+4. Analyse la base de données et les relations.
+5. Examine les systèmes d'authentification et de permissions.
+6. Examine les modules de courrier.
+7. Examine le moteur de workflow.
+8. Examine les tableaux de bord.
+9. Identifie les fonctionnalités incomplètes, simulées ou défectueuses.
+10. Identifie les problèmes de sécurité, de duplication et de maintenabilité.
+
+Ne supprime aucun fichier et ne remplace pas l'architecture avant d'avoir compris l'existant.
+
+Présente les résultats de l'audit, les problèmes détectés et l'architecture recommandée.
+
+## PHASE 2 — CONCEPTION
+
+Propose :
+- L'architecture cible.
+- La structure des dossiers.
+- Le modèle de données.
+- Les relations entre les entités.
+- Les API nécessaires.
+- Le système d'authentification.
+- La gestion des rôles et permissions.
+- Le moteur de workflow.
+- Le module documentaire.
+- L'intégration OCR et IA.
+- Les tableaux de bord.
+- Le plan de migration des données, si nécessaire.
+
+Respecte les contraintes métier de ce cahier des charges.
+
+## PHASE 3 — DÉVELOPPEMENT
+
+Après validation du plan de développement, construis l'application progressivement.
+
+Ordre de réalisation recommandé :
+
+1. Architecture et fondations techniques.
+2. Base de données et isolation des entreprises.
+3. Authentification et inscription.
+4. Rôles et permissions.
+5. Gestion des services et utilisateurs.
+6. Gestion des courriers.
+7. Gestion documentaire.
+8. OCR et intelligence artificielle.
+9. Moteur de workflow.
+10. Espace Secrétariat.
+11. Tableaux de bord.
+12. Notifications.
+13. Archivage et recherche.
+14. Rapports et statistiques.
+15. Abonnements.
+16. Sécurité, tests et optimisation.
+
+Ne crée pas uniquement des interfaces statiques. Chaque bouton, formulaire, filtre et action doit être relié à une fonctionnalité réelle lorsqu'il est présenté comme opérationnel.
+
+## PHASE 4 — CONTRÔLE QUALITÉ
+
+Vérifie les parcours complets de chaque rôle.
+
+Teste particulièrement le cycle d'un courrier entrant, depuis sa réception au Secrétariat jusqu'à son archivage final.
+
+Vérifie que :
+- L'IA ne valide jamais seule un courrier.
+- Les informations non détectées ne sont pas inventées.
+- Le Président intervient uniquement lorsque le circuit l'exige.
+- Le Secrétariat est le point de réception et le point de retour final obligatoire des courriers entrants.
+- Les workflows parallèles et séquentiels fonctionnent réellement.
+- Les versions de circuits sont conservées.
+- Les permissions sont respectées.
+- Les données sont persistantes.
+- Les entreprises sont isolées.
+
+## PHASE 5 — LIVRAISON
+
+Fournis une application stable, complète, testable et prête à être configurée pour le déploiement.
+
+Signale clairement :
+- Les fonctionnalités terminées.
+- Les fonctionnalités partiellement terminées.
+- Les services externes à configurer.
+- Les clés API nécessaires.
+- Les limites techniques éventuelles.
+- Les tests effectués.
+- Les éventuelles étapes restantes.
+
+**RÈGLE FINALE : privilégie toujours la cohérence métier, la sécurité, la qualité de l'architecture et le fonctionnement réel plutôt que la simple apparence visuelle.**
+
+NEXORA doit être conçu comme un véritable outil professionnel de gestion administrative et de circulation documentaire, capable d'évoluer et d'être utilisé par plusieurs entreprises.

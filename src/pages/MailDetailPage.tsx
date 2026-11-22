@@ -1,0 +1,1487 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Archive,
+  ArrowLeft,
+  Bold,
+  CheckCircle2,
+  Download,
+  Eraser,
+  Eye,
+  EyeOff,
+  FileText,
+  Italic,
+  Lock,
+  MailCheck,
+  MessageSquarePlus,
+  PenTool,
+  Save,
+  Send,
+  ShieldAlert,
+  Stamp,
+  Underline,
+  Upload,
+  UserCheck,
+  X,
+} from 'lucide-react';
+import { apiFetch, downloadAuthenticatedFile, getAuthToken } from '../api/client.ts';
+import type { AppPage } from '../components/common/AppShell.tsx';
+import { PriorityLabel, StatusLabel } from '../components/common/StatusBadge.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
+import type {
+  CircuitItem,
+  MailActionLockInfo,
+  MailItem,
+  MailSignatureItem,
+  ServiceItem,
+} from '../types/nexora.ts';
+
+interface MailDetailResponse {
+  mail: MailItem & { created_by_name?: string };
+  documents: Array<{
+    id: string;
+    doc_kind: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    version: number;
+    uploaded_by_name: string;
+    created_at: string;
+  }>;
+  aiAnalyses: Array<{
+    id: string;
+    status: string;
+    is_simulated: number;
+    short_summary: string;
+    detailed_summary: string;
+    ocr_text: string;
+    validated_by_name: string | null;
+    created_at: string;
+  }>;
+  workflowInstance: { id: string; status: string; current_step_index: number } | null;
+  workflowSteps: Array<{
+    id: string;
+    step_order: number;
+    step_name: string;
+    step_type: string;
+    mode: string;
+    status: string;
+    service_name: string | null;
+    assigned_user_name: string | null;
+    decision: string;
+    decision_motif: string;
+    observations: string;
+    decided_by_name: string | null;
+    decided_at: string | null;
+    due_at: string | null;
+    parallel_approvals_json: string;
+  }>;
+  tasks: Array<{ id: string; title: string; status: string; assigned_user_name: string | null; due_date: string }>;
+  comments: Array<{ id: string; user_name: string; user_role: string; comment_type: string; content: string; created_at: string }>;
+  shipments: Array<{ id: string; dispatch_mode: string; tracking_ref: string; recipient_details: string; dispatched_by_name: string; dispatched_at: string; notes: string }>;
+  emailLogs: Array<{ id: string; recipient_email: string; recipient_name: string; department_name: string; subject: string; delivery_status: string; created_at: string }>;
+  auditLogs: Array<{ id: string; user_name: string; action: string; old_value_json: string; new_value_json: string; context: string; created_at: string }>;
+  signatures: MailSignatureItem[];
+  actionLock: MailActionLockInfo;
+  currentUserSignAssets: {
+    signatureImage: string;
+    stampImage: string;
+    companyStampImage: string;
+  };
+}
+
+interface MailDetailPageProps {
+  mailId: string;
+  onNavigate: (page: AppPage, param?: string) => void;
+}
+
+export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
+  const { user } = useAuth();
+  const [data, setData] = useState<MailDetailResponse | null>(null);
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [circuits, setCircuits] = useState<CircuitItem[]>([]);
+  const [users, setUsers] = useState<Array<{ id: string; full_name: string; role: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState('');
+
+  // Action inputs
+  const [orientServiceId, setOrientServiceId] = useState('');
+  const [orientCircuitId, setOrientCircuitId] = useState('');
+  const [assignAgentId, setAssignAgentId] = useState('');
+  const [assignDueDate, setAssignDueDate] = useState('');
+  const [assignInstructions, setAssignInstructions] = useState('');
+  const [decisionNote, setDecisionNote] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [commentType, setCommentType] = useState('OBSERVATION');
+  const [dispatchForm, setDispatchForm] = useState({ dispatchMode: 'COURSIER', trackingRef: '', recipientDetails: '', notes: '' });
+  const [docKind, setDocKind] = useState('PROJET_REPONSE');
+
+  // President Signature & Stamp state
+  const [sigMode, setSigMode] = useState<'SAVED' | 'DRAW'>('SAVED');
+  const [includeStamp, setIncludeStamp] = useState(true);
+  const [customStampImg, setCustomStampImg] = useState('');
+  const [hasDrawnSig, setHasDrawnSig] = useState(false);
+  const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+
+  // Document viewer state
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [docBlobUrls, setDocBlobUrls] = useState<Record<string, string>>({});
+  const [docLoadingId, setDocLoadingId] = useState<string | null>(null);
+
+  // Draft editor state
+  const [draftHtml, setDraftHtml] = useState('');
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const draftEditorRef = useRef<HTMLDivElement | null>(null);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [detail, svcRes, cirRes, usrRes] = await Promise.all([
+        apiFetch<MailDetailResponse>(`/api/mails/${mailId}`),
+        apiFetch<{ services: ServiceItem[] }>('/api/services'),
+        apiFetch<{ circuits: CircuitItem[] }>('/api/circuits'),
+        apiFetch<{ users: Array<{ id: string; full_name: string; role: string }> }>('/api/users'),
+      ]);
+      setData(detail);
+      setServices(svcRes.services);
+      setCircuits(cirRes.circuits);
+      setUsers(usrRes.users);
+      setOrientServiceId(detail.mail.current_service_id || '');
+      setOrientCircuitId(detail.mail.circuit_id || cirRes.circuits.find((c) => c.mail_direction === detail.mail.direction)?.id || '');
+      if (!detail.currentUserSignAssets?.signatureImage) {
+        setSigMode('DRAW');
+      } else {
+        setSigMode('SAVED');
+      }
+      // Initialize draft editor with server content
+      const serverDraft = (detail.mail as MailItem & { draft_response_html?: string }).draft_response_html || '';
+      setDraftHtml(serverDraft);
+      if (draftEditorRef.current && draftEditorRef.current.innerHTML !== serverDraft) {
+        draftEditorRef.current.innerHTML = serverDraft;
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur de chargement du courrier');
+    } finally {
+      setLoading(false);
+    }
+  }, [mailId]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const getPointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = sigCanvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  };
+
+  const startSigDraw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.setPointerCapture(e.pointerId);
+    const pos = getPointerPos(e);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    isDrawingRef.current = true;
+    setHasDrawnSig(true);
+  };
+
+  const moveSigDraw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current || !sigCanvasRef.current) return;
+    const ctx = sigCanvasRef.current.getContext('2d');
+    if (!ctx) return;
+    const pos = getPointerPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const endSigDraw = () => {
+    isDrawingRef.current = false;
+  };
+
+  const clearSigCanvas = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawnSig(false);
+  };
+
+  const handleUploadCustomStamp = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCustomStampImg(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
+  const handleOrient = async () => {
+    setFeedback('');
+    setError('');
+    try {
+      const res = await apiFetch<{ departmentEmailsTriggered: number }>(`/api/mails/${mailId}/orient`, {
+        method: 'POST',
+        body: JSON.stringify({
+          serviceId: orientServiceId,
+          circuitId: orientCircuitId,
+          observations: decisionNote || 'Orientation effectuée par le Secrétariat.',
+        }),
+      });
+      setFeedback(
+        res.departmentEmailsTriggered > 0
+          ? 'Courrier orienté et e-mail automatique envoyé au chef de département. Le dossier est maintenant transmis.'
+          : 'Courrier orienté et circuit mis à jour. Le dossier est maintenant transmis.'
+      );
+      setDecisionNote('');
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    }
+  };
+
+  const handleAssignAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFeedback('');
+    setError('');
+    try {
+      const res = await apiFetch<{ departmentEmailsTriggered: number }>(`/api/mails/${mailId}/assign-agent`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: assignAgentId,
+          dueDate: assignDueDate,
+          instructions: assignInstructions,
+        }),
+      });
+      setFeedback(
+        `Courrier affecté à l’agent. ${res.departmentEmailsTriggered} e-mail(s) de notification envoyé(s) automatiquement au chef du département.`
+      );
+      setAssignInstructions('');
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    }
+  };
+
+  const handleDecision = async (decision: string) => {
+    setFeedback('');
+    setError('');
+    try {
+      let signatureImage: string | undefined;
+      let stampImage: string | undefined;
+
+      if (decision === 'APPROUVER' && data?.actionLock.requiresPresidentSignature) {
+        if (sigMode === 'DRAW') {
+          if (!hasDrawnSig || !sigCanvasRef.current) {
+            setError('Veuillez tracer votre signature numérique dans le cadre ou utiliser votre signature enregistrée.');
+            return;
+          }
+          signatureImage = sigCanvasRef.current.toDataURL('image/png');
+        } else {
+          signatureImage = data.currentUserSignAssets?.signatureImage || '';
+          if (!signatureImage) {
+            setError('Aucune signature enregistrée dans votre profil. Tracez votre signature ci-dessous.');
+            return;
+          }
+        }
+        if (includeStamp) {
+          stampImage =
+            customStampImg ||
+            data.currentUserSignAssets?.stampImage ||
+            data.currentUserSignAssets?.companyStampImage ||
+            '';
+        }
+      }
+
+      await apiFetch(`/api/mails/${mailId}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({
+          decision,
+          motif: decisionNote,
+          observations: decisionNote,
+          signatureImage,
+          stampImage,
+        }),
+      });
+      setFeedback(`Décision "${decision}" enregistrée. Votre intervention est clôturée et le dossier est transmis.`);
+      setDecisionNote('');
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action refusée');
+    }
+  };
+
+  const handleCompleteDirect = async () => {
+    setFeedback('');
+    setError('');
+    try {
+      await apiFetch(`/api/mails/${mailId}/complete-direct`, {
+        method: 'POST',
+        body: JSON.stringify({ observations: decisionNote }),
+      });
+      setFeedback('Traitement terminé et retourné au Secrétariat. Le courrier est désormais verrouillé pour votre profil.');
+      setDecisionNote('');
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action refusée');
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+    setError('');
+    try {
+      await apiFetch(`/api/mails/${mailId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ commentType, content: commentText }),
+      });
+      setCommentText('');
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    }
+  };
+
+  const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('docKind', docKind);
+    try {
+      await apiFetch(`/api/mails/${mailId}/documents`, { method: 'POST', body: fd });
+      setFeedback('Document ajouté et versionné.');
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur upload');
+    }
+  };
+
+  const handleDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await apiFetch(`/api/mails/${mailId}/dispatch`, {
+        method: 'POST',
+        body: JSON.stringify(dispatchForm),
+      });
+      setFeedback('Expédition enregistrée et preuve consignée.');
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur');
+    }
+  };
+
+  const handleArchive = async () => {
+    setError('');
+    try {
+      await apiFetch(`/api/mails/${mailId}/archive`, { method: 'POST' });
+      setFeedback('Dossier clôturé et archivé définitivement.');
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur archivage');
+    }
+  };
+
+  // ── Document Viewer helpers ──
+  const loadDocBlob = async (docId: string) => {
+    if (docBlobUrls[docId]) return;
+    setDocLoadingId(docId);
+    try {
+      const headers: Record<string, string> = { 'X-Requested-With': 'XMLHttpRequest' };
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const r = await fetch(`/api/documents/${docId}/file`, { headers, credentials: 'include' });
+      if (!r.ok) throw new Error('Échec de chargement du document');
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      setDocBlobUrls((prev) => ({ ...prev, [docId]: url }));
+    } catch {
+      setError("Impossible de charger l'aperçu du document.");
+    } finally {
+      setDocLoadingId(null);
+    }
+  };
+
+  const toggleDocPreview = async (docId: string) => {
+    if (previewDocId === docId) {
+      setPreviewDocId(null);
+      return;
+    }
+    setPreviewDocId(docId);
+    await loadDocBlob(docId);
+  };
+
+  // ── Draft editor helpers ──
+  const execDraftCommand = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    draftEditorRef.current?.focus();
+  };
+
+  const handleDraftInput = () => {
+    const html = draftEditorRef.current?.innerHTML || '';
+    setDraftHtml(html);
+    setDraftSaved(false);
+    // Autosave debounce (3 seconds)
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      saveDraft(html);
+    }, 3000);
+  };
+
+  const saveDraft = async (html?: string) => {
+    const content = html ?? draftHtml;
+    if (!content && !draftHtml) return;
+    setDraftSaving(true);
+    try {
+      const plainText = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      await apiFetch(`/api/mails/${mailId}/draft`, {
+        method: 'PATCH',
+        body: JSON.stringify({ draftHtml: content, draftText: plainText }),
+      });
+      setDraftSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur sauvegarde brouillon');
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    await saveDraft();
+    setFeedback('Brouillon sauvegardé avec succès.');
+  };
+
+  if (loading) return <div className="p-8 text-sm text-slate-500">Chargement de la fiche courrier...</div>;
+  if (!data || !user) return <div className="p-6 text-sm text-red-600">{error || 'Courrier introuvable'}</div>;
+
+  const {
+    mail,
+    documents,
+    aiAnalyses,
+    workflowSteps,
+    comments,
+    shipments,
+    emailLogs,
+    auditLogs,
+    signatures = [],
+    actionLock,
+    currentUserSignAssets,
+  } = data;
+
+  const activeStep = workflowSteps.find((s) => s.status === 'EN_COURS');
+  const agents = users.filter((u) => u.role === 'AGENT');
+  const effectiveSavedStamp =
+    customStampImg || currentUserSignAssets?.stampImage || currentUserSignAssets?.companyStampImage || '';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={() => onNavigate('mails')}
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Retour à la liste</span>
+        </button>
+
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{mail.reference}</span>
+          <span aria-hidden="true">·</span>
+          <span>{mail.direction}</span>
+          <span aria-hidden="true">·</span>
+          <PriorityLabel priority={mail.priority} />
+          <span aria-hidden="true">·</span>
+          <StatusLabel status={mail.mail_status} />
+          <span aria-hidden="true">·</span>
+          <StatusLabel status={mail.shipping_status} />
+          <span aria-hidden="true">·</span>
+          <StatusLabel status={mail.archive_status} />
+        </div>
+      </div>
+
+      {feedback && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-sm text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{feedback}</span>
+        </div>
+      )}
+      {error && (
+        <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Turn-Based Read-Only Lock Banner when user cannot act */}
+      {!actionLock.canAct && (
+        <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-slate-600 dark:text-slate-300 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                Dossier verrouillé en lecture seule pour votre compte
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{actionLock.lockReason}</p>
+            </div>
+          </div>
+          <span className="text-xs font-mono px-2.5 py-1 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+            Détenteur actuel : {actionLock.currentHolderLabel}
+          </span>
+        </div>
+      )}
+
+      {/* Header Metadata Card */}
+      <div className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">{mail.subject}</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300 max-w-3xl">{mail.description}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs shrink-0">
+            <div>
+              <span className="text-slate-400 block">Expéditeur</span>
+              <span className="font-medium">{mail.sender_org || mail.sender_name || 'Interne'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Destinataire</span>
+              <span className="font-medium">{mail.recipient_name || mail.recipient_org || 'Organisation'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Service actuel</span>
+              <span className="font-medium">{mail.service_name || 'Non affecté'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Agent affecté</span>
+              <span className="font-medium">{mail.assigned_agent_name || 'En attente'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Réception</span>
+              <span className="font-mono">{mail.received_at.slice(0, 10)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Échéance</span>
+              <span className="font-mono">{mail.due_date || 'Non fixée'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Workflow Progression */}
+      <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+          <div>
+            <h2 className="font-display text-base font-bold">Parcours du circuit administratif</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {mail.circuit_name ? `Circuit : ${mail.circuit_name}` : 'Aucun circuit démarré'} · Statut workflow : {mail.workflow_status}
+            </p>
+          </div>
+          {mail.direction === 'ENTRANT' && (
+            <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400">
+              Règle active : Retour obligatoire au Secrétariat avant clôture
+            </span>
+          )}
+        </div>
+
+        {workflowSteps.length === 0 ? (
+          <p className="text-sm text-slate-500">Ce courrier n’a pas encore été engagé dans un workflow.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {workflowSteps.map((st) => (
+              <div
+                key={st.id}
+                className={`p-3.5 rounded-lg border text-xs space-y-1.5 ${
+                  st.status === 'EN_COURS'
+                    ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30'
+                    : st.status === 'VALIDE' || st.status === 'TERMINE'
+                    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30'
+                }`}
+              >
+                <div className="flex items-center justify-between font-mono">
+                  <span className="font-bold">Étape {st.step_order}</span>
+                  <StatusLabel status={st.status} />
+                </div>
+                <p className="font-semibold text-slate-900 dark:text-white">{st.step_name}</p>
+                <p className="text-slate-500">
+                  {st.service_name || 'Service'} {st.assigned_user_name ? `· ${st.assigned_user_name}` : ''}
+                </p>
+                {st.mode === 'PARALLEL' && (
+                  <p className="font-mono text-[11px] text-indigo-700 dark:text-indigo-400">
+                    Mode parallèle ({JSON.parse(st.parallel_approvals_json || '[]').length} avis)
+                  </p>
+                )}
+                {st.decided_by_name && (
+                  <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-700">
+                    {st.decision} par {st.decided_by_name}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* LEFT COLUMN: Active Role Actions + Signatures/Stamps + AI Summary + Documents */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Action Console ONLY when actionLock.canAct is true */}
+          {actionLock.canAct && (
+            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-base font-bold">Actions de traitement &amp; Décisions</h2>
+                <span className="text-xs font-mono text-blue-700 dark:text-blue-400">
+                  À votre niveau : {actionLock.currentHolderLabel}
+                </span>
+              </div>
+
+              {/* Orientation by Secretariat */}
+              {actionLock.canOrient && (
+                <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                  <p className="text-xs font-semibold">Orientation Secrétariat</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <select
+                      value={orientServiceId}
+                      onChange={(e) => setOrientServiceId(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    >
+                      <option value="">Service destinataire...</option>
+                      {services.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={orientCircuitId}
+                      onChange={(e) => setOrientCircuitId(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    >
+                      <option value="">Circuit administratif...</option>
+                      {circuits.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOrient}
+                    className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                  >
+                    Orienter et transmettre
+                  </button>
+                </div>
+              )}
+
+              {/* Assign to Agent -> Sends Department Head Email! */}
+              {actionLock.canAssignAgent && (
+                <form onSubmit={handleAssignAgent} className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-blue-600" />
+                      <span>Affecter à un Agent</span>
+                    </p>
+                    <span className="text-[11px] text-slate-500">Déclenche un e-mail automatique au chef de département</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <select
+                      required
+                      value={assignAgentId}
+                      onChange={(e) => setAssignAgentId(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    >
+                      <option value="">Choisir un agent...</option>
+                      {agents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.full_name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={assignDueDate}
+                      onChange={(e) => setAssignDueDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={assignInstructions}
+                    onChange={(e) => setAssignInstructions(e.target.value)}
+                    placeholder="Instructions de traitement pour l’agent..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500"
+                  >
+                    Affecter à l’agent &amp; notifier le chef de département
+                  </button>
+                </form>
+              )}
+
+              {/* Direct Treatment Completion without workflow */}
+              {actionLock.allowedActions.includes('COMPLETE_DIRECT_TREATMENT') && (
+                <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <p className="text-xs font-semibold">Traitement direct affecté à votre compte</p>
+                  <textarea
+                    rows={2}
+                    value={decisionNote}
+                    onChange={(e) => setDecisionNote(e.target.value)}
+                    placeholder="Compte rendu ou observations de traitement..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCompleteDirect}
+                    className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                  >
+                    Terminer le traitement &amp; Retourner au Secrétariat
+                  </button>
+                </div>
+              )}
+
+              {/* Workflow Step Decision Controls */}
+              {activeStep && (
+                <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <p className="text-xs font-semibold">
+                    Étape active : <span className="text-blue-700 dark:text-blue-400">{activeStep.step_name}</span>
+                  </p>
+                  <textarea
+                    rows={2}
+                    value={decisionNote}
+                    onChange={(e) => setDecisionNote(e.target.value)}
+                    placeholder="Observations, motif de rejet ou instructions de correction..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  />
+
+                  {/* President Digital Signature & Official Stamp Pad */}
+                  {actionLock.requiresPresidentSignature && (
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-indigo-200 dark:border-indigo-900 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <PenTool className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
+                            Signature numérique &amp; Apposition du cachet officiel (Président)
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate('profile')}
+                          className="text-[11px] text-blue-700 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          Configurer dans Mon profil
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSigMode('SAVED')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                            sigMode === 'SAVED'
+                              ? 'bg-slate-900 text-white border-slate-900 dark:bg-blue-600 dark:border-blue-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700'
+                          }`}
+                        >
+                          Utiliser signature &amp; cachet du profil
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSigMode('DRAW')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                            sigMode === 'DRAW'
+                              ? 'bg-slate-900 text-white border-slate-900 dark:bg-blue-600 dark:border-blue-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700'
+                          }`}
+                        >
+                          Signer à la main ici
+                        </button>
+                      </div>
+
+                      {sigMode === 'SAVED' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                            <p className="text-[11px] text-slate-500 mb-1.5">Signature numérique enregistrée</p>
+                            {currentUserSignAssets?.signatureImage ? (
+                              <img
+                                src={currentUserSignAssets.signatureImage}
+                                alt="Signature Président"
+                                className="h-16 object-contain bg-white rounded"
+                              />
+                            ) : (
+                              <p className="text-xs text-amber-700">
+                                Aucune signature enregistrée. Passez sur &laquo; Signer à la main ici &raquo; ou configurez-la dans Mon profil.
+                              </p>
+                            )}
+                          </div>
+                          <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                            <p className="text-[11px] text-slate-500 mb-1.5">Image du cachet officiel</p>
+                            {effectiveSavedStamp ? (
+                              <img
+                                src={effectiveSavedStamp}
+                                alt="Cachet officiel"
+                                className="h-16 object-contain bg-white rounded"
+                              />
+                            ) : (
+                              <p className="text-xs text-slate-500">Aucun cachet configuré.</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span>Tracez votre signature avec la souris ou le doigt :</span>
+                            <button
+                              type="button"
+                              onClick={clearSigCanvas}
+                              className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:underline"
+                            >
+                              <Eraser className="w-3 h-3" />
+                              <span>Effacer</span>
+                            </button>
+                          </div>
+                          <div className="rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white overflow-hidden">
+                            <canvas
+                              ref={sigCanvasRef}
+                              width={520}
+                              height={140}
+                              onPointerDown={startSigDraw}
+                              onPointerMove={moveSigDraw}
+                              onPointerUp={endSigDraw}
+                              onPointerCancel={endSigDraw}
+                              className="w-full h-32 touch-none cursor-crosshair block"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={includeStamp}
+                            onChange={(e) => setIncludeStamp(e.target.checked)}
+                            className="rounded border-slate-300"
+                          />
+                          <Stamp className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Apposer l’image du cachet officiel</span>
+                        </label>
+                        {includeStamp && (
+                          <label className="inline-flex items-center gap-1 text-[11px] text-blue-700 dark:text-blue-400 cursor-pointer hover:underline">
+                            <Upload className="w-3 h-3" />
+                            <span>Importer un autre cachet</span>
+                            <input type="file" accept="image/*" onChange={handleUploadCustomStamp} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {actionLock.activeDelegation && (
+                    <div className="p-3.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <Stamp className="w-4 h-4 text-amber-600" />
+                        Signature autorisée par délégation présidentielle
+                      </p>
+                      <p>
+                        Délégué par : <span className="font-semibold">{actionLock.activeDelegation.delegatorName}</span> (Président) au profit de{' '}
+                        <span className="font-semibold">{actionLock.activeDelegation.delegateName}</span>.
+                      </p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                        Validité jusqu’au {actionLock.activeDelegation.endDate}
+                        {actionLock.activeDelegation.restrictions ? ` · Restrictions : ${actionLock.activeDelegation.restrictions}` : ''}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    {actionLock.allowedActions.includes('TRANSMETTRE') && !actionLock.allowedActions.includes('APPROUVER') ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDecision('TRANSMETTRE')}
+                        className="px-3.5 py-2 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                      >
+                        Transmettre l’étape suivante
+                      </button>
+                    ) : (
+                      <>
+                        {actionLock.allowedActions.includes('APPROUVER') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('APPROUVER')}
+                            className="px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600"
+                          >
+                            {actionLock.requiresPresidentSignature
+                              ? actionLock.activeDelegation
+                                ? 'Signer par délégation du Président & Approuver'
+                                : 'Signer numériquement, apposer le cachet & Approuver'
+                              : 'Valider / Transmettre'}
+                          </button>
+                        )}
+                        {actionLock.allowedActions.includes('DEMANDER_CORRECTION') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('DEMANDER_CORRECTION')}
+                            className="px-3.5 py-2 rounded-lg border border-amber-500 text-amber-700 dark:text-amber-400 text-xs font-semibold"
+                          >
+                            Demander correction
+                          </button>
+                        )}
+                        {actionLock.allowedActions.includes('REJETER') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('REJETER')}
+                            className="px-3.5 py-2 rounded-lg border border-red-500 text-red-700 dark:text-red-400 text-xs font-semibold"
+                          >
+                            Rejeter
+                          </button>
+                        )}
+                        {actionLock.allowedActions.includes('CLASSER_SANS_SUITE') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('CLASSER_SANS_SUITE')}
+                            className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium"
+                          >
+                            Classer sans suite
+                          </button>
+                        )}
+                        {actionLock.allowedActions.includes('REPRENDRE') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('REPRENDRE')}
+                            className="px-3.5 py-2 rounded-lg border border-blue-500 text-blue-700 text-xs font-medium"
+                          >
+                            Reprendre
+                          </button>
+                        )}
+                        {actionLock.allowedActions.includes('SUSPENDRE') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('SUSPENDRE')}
+                            className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium"
+                          >
+                            Suspendre
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Secretariat Final Dispatch & Archive Controls ONLY when canDispatchOrArchive */}
+              {actionLock.canDispatchOrArchive && (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  <form onSubmit={handleDispatch} className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                    <p className="text-xs font-semibold flex items-center gap-1.5">
+                      <Send className="w-4 h-4 text-indigo-600" />
+                      <span>Contrôle final Secrétariat &amp; Enregistrement de l’expédition</span>
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={dispatchForm.dispatchMode}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, dispatchMode: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      >
+                        <option value="COURSIER">Coursier / Bordereau</option>
+                        <option value="POSTE">Poste recommandée</option>
+                        <option value="EMAIL">E-mail officiel</option>
+                        <option value="REMISE_MAIN_PROPRE">Remise en main propre</option>
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="N° preuve / suivi..."
+                        value={dispatchForm.trackingRef}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, trackingRef: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Destinataire / Notes..."
+                        value={dispatchForm.notes}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        className="px-3.5 py-2 rounded-lg bg-indigo-700 text-white text-xs font-semibold hover:bg-indigo-600"
+                      >
+                        Enregistrer l’expédition
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleArchive}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold"
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                        <span>Clôturer &amp; Archiver</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Affixed Digital Signatures & Official Stamps */}
+          {signatures.length > 0 && (
+            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <Stamp className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                  <span>Signatures numériques &amp; Cachets officiels apposés ({signatures.length})</span>
+                </h2>
+                <span className="text-[11px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                  Signature interne d’entreprise (intégration prestataire certifié eIDAS disponible)
+                </span>
+              </div>
+              <div className="space-y-4">
+                {signatures.map((sig) => (
+                  <div
+                    key={sig.id}
+                    className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-3">
+                        {sig.signer_avatar_url && (
+                          <img
+                            src={sig.signer_avatar_url}
+                            alt={sig.signer_name}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                          />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-900 dark:text-white">
+                              {sig.signer_name} — {sig.signer_title}
+                            </p>
+                            {sig.is_delegated === 1 ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                SIGNATURE PAR DÉLÉGATION DU PRÉSIDENT
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                SIGNATURE DIRECTE DU PRÉSIDENT
+                              </span>
+                            )}
+                          </div>
+                          {sig.is_delegated === 1 && (
+                            <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mt-0.5">
+                              Pour ordre et au nom de : {sig.represented_name} ({sig.represented_role}) · Réf. délégation : {sig.delegation_id}
+                            </p>
+                          )}
+                          <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                            Signé le {sig.signed_at.slice(0, 16)} · Empreinte d’intégrité : {sig.signature_hash.slice(0, 28)}...
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                        SIGNÉ &amp; VISÉ
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-white border border-slate-200">
+                      <img
+                        src={sig.signature_image}
+                        alt={`Signature de ${sig.signer_name}`}
+                        className="h-20 object-contain"
+                      />
+                      {sig.stamp_image && (
+                        <img
+                          src={sig.stamp_image}
+                          alt="Cachet officiel apposé"
+                          className="h-24 w-24 object-contain"
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* AI Summaries & OCR Trace */}
+          {aiAnalyses.length > 0 && (
+            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-base font-bold">Résumé &amp; Extraction IA</h2>
+                <span className="text-xs font-mono text-slate-500">
+                  {aiAnalyses[0].is_simulated === 1 ? 'Analyse de démonstration simulée' : 'Analyse Gemini réelle'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{aiAnalyses[0].short_summary}</p>
+              {aiAnalyses[0].detailed_summary && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line pt-2 border-t border-slate-100 dark:border-slate-800">
+                  {aiAnalyses[0].detailed_summary}
+                </p>
+              )}
+              {aiAnalyses[0].validated_by_name && (
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Vérifié et validé humainement par {aiAnalyses[0].validated_by_name}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* Documents & Versions â€” with Inline Preview */}
+          <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-base font-bold">Documents associÃ©s ({documents.length})</h2>
+              {actionLock.canAct && actionLock.canUploadDocument && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={docKind}
+                    onChange={(e) => setDocKind(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  >
+                    <option value="PROJET_REPONSE">Projet de rÃ©ponse</option>
+                    <option value="REPONSE_DEFINITIVE">RÃ©ponse dÃ©finitive</option>
+                    <option value="PIECE_JOINTE">PiÃ¨ce jointe</option>
+                    <option value="PREUVE_EXPEDITION">Preuve d&#39;expÃ©dition</option>
+                    <option value="JUSTIFICATIF">Justificatif</option>
+                  </select>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Joindre</span>
+                    <input type="file" accept=".pdf,image/*" onChange={handleUploadDoc} className="hidden" />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {documents.length === 0 ? (
+              <p className="text-xs text-slate-500">Aucun document joint pour ce dossier.</p>
+            ) : (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="py-2.5 px-3 flex items-center justify-between gap-4 text-xs bg-slate-50 dark:bg-slate-800/60">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-white truncate">{doc.filename}</p>
+                          <p className="text-slate-500">
+                            {doc.doc_kind} Â· v{doc.version} Â· {Math.max(1, Math.round(doc.size_bytes / 1024))} Ko
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleDocPreview(doc.id)}
+                          className={`inline-flex items-center gap-1 font-medium hover:underline ${
+                            previewDocId === doc.id
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-indigo-700 dark:text-indigo-400'
+                          }`}
+                        >
+                          {previewDocId === doc.id ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5" />
+                              <span>Fermer</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Visualiser</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            downloadAuthenticatedFile(`/api/documents/${doc.id}/file`, doc.filename).catch((err) =>
+                              setError(err instanceof Error ? err.message : 'Erreur tÃ©lÃ©chargement')
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium hover:underline"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>TÃ©lÃ©charger</span>
+                        </button>
+                      </div>
+                    </div>
+                    {previewDocId === doc.id && (
+                      <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2">
+                        {docLoadingId === doc.id ? (
+                          <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+                            Chargement de l&#39;aperÃ§uâ€¦
+                          </div>
+                        ) : docBlobUrls[doc.id] ? (
+                          <div className="relative max-h-[600px] overflow-auto rounded border border-slate-100 dark:border-slate-800">
+                            {doc.mime_type?.startsWith('image/') || doc.filename.endsWith('.svg') ? (
+                              <img
+                                src={docBlobUrls[doc.id]}
+                                alt={doc.filename}
+                                className="w-full h-auto object-contain"
+                              />
+                            ) : doc.mime_type === 'application/pdf' ? (
+                              <iframe
+                                src={docBlobUrls[doc.id]}
+                                title={doc.filename}
+                                className="w-full min-h-[500px] border-0"
+                              />
+                            ) : (
+                              <div className="p-4 text-xs text-slate-500 text-center">
+                                Format non supportÃ© pour l&#39;aperÃ§u en ligne ({doc.mime_type}).
+                                Veuillez tÃ©lÃ©charger le fichier.
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center py-8 text-sm text-red-500">
+                            Ã‰chec de chargement de l&#39;aperÃ§u
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Draft Response Editor */}
+          {(mail.direction === 'ENTRANT' || (mail as unknown as { requires_response?: number }).requires_response === 1) && (
+            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-base font-bold">ðŸ“ Projet de rÃ©ponse / Document de travail</h2>
+                {draftSaved && (
+                  <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> SauvegardÃ©
+                  </span>
+                )}
+                {draftSaving && (
+                  <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400">Sauvegarde en coursâ€¦</span>
+                )}
+              </div>
+
+              {actionLock.canAct && (
+                <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <button type="button" onClick={() => execDraftCommand('bold')} title="Gras" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <Bold className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => execDraftCommand('italic')} title="Italique" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <Italic className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => execDraftCommand('underline')} title="SoulignÃ©" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <Underline className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+                  <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner Ã  gauche" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <AlignLeft className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => execDraftCommand('justifyCenter')} title="Centrer" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <AlignCenter className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner Ã  droite" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <AlignRight className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+                  <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste Ã  puces" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
+                    â€¢
+                  </button>
+                  <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numÃ©rotÃ©e" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
+                    1.
+                  </button>
+                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+                  <select
+                    onChange={(e) => { execDraftCommand('fontSize', e.target.value); e.target.value = ''; }}
+                    className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Taille</option>
+                    <option value="1">Petit</option>
+                    <option value="3">Normal</option>
+                    <option value="5">Grand</option>
+                    <option value="7">TrÃ¨s grand</option>
+                  </select>
+                </div>
+              )}
+
+              <div
+                ref={draftEditorRef}
+                contentEditable={actionLock.canAct}
+                suppressContentEditableWarning
+                onInput={handleDraftInput}
+                className={`min-h-[300px] max-h-[600px] overflow-y-auto p-4 rounded-lg border ${
+                  actionLock.canAct
+                    ? 'border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
+                } bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none prose prose-sm dark:prose-invert max-w-none`}
+                dangerouslySetInnerHTML={{ __html: draftHtml }}
+              />
+
+              <div className="flex items-center justify-between gap-4">
+                {actionLock.canAct ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={draftSaving}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{draftSaving ? 'Sauvegardeâ€¦' : 'Sauvegarder le brouillon'}</span>
+                  </button>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    Ã‰dition dÃ©sactivÃ©e â€” le dossier n&#39;est pas Ã  votre niveau de traitement.
+                  </p>
+                )}
+                {(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by && (
+                  <p className="text-[11px] text-slate-500 text-right">
+                    DerniÃ¨re modification par{' '}
+                    <span className="font-medium">{(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}</span>
+                    {' Â· '}
+                    {((mail as unknown as { draft_response_updated_at?: string }).draft_response_updated_at || '').slice(0, 16)}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: Department Emails Dispatched, Comments & Audit Trail */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Department Head Email Dispatches */}
+          <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center gap-2">
+              <MailCheck className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-display text-base font-bold">E-mails départementaux envoyés ({emailLogs.length})</h2>
+            </div>
+            {emailLogs.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                Aucun e-mail départemental encore déclenché pour ce courrier. Dès qu’un agent recevra ce courrier, le chef de son département recevra un e-mail ici.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {emailLogs.map((e) => (
+                  <div key={e.id} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1">
+                    <p className="font-semibold text-slate-900 dark:text-white">{e.subject}</p>
+                    <p className="text-slate-600 dark:text-slate-300">
+                      Chef de département ({e.department_name}) : {e.recipient_name} &lt;{e.recipient_email}&gt;
+                    </p>
+                    <p className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
+                      {e.delivery_status === 'SENT_SMTP' ? 'Livré via SMTP' : 'Enregistré dans la file d’envoi'} · {e.created_at.slice(0, 16)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Shipments */}
+          {shipments.length > 0 && (
+            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+              <h2 className="font-display text-base font-bold">Preuves d’expédition</h2>
+              {shipments.map((sh) => (
+                <div key={sh.id} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1">
+                  <p className="font-semibold">
+                    {sh.dispatch_mode} · Réf. {sh.tracking_ref}
+                  </p>
+                  <p className="text-slate-500">
+                    Par {sh.dispatched_by_name} le {sh.dispatched_at.slice(0, 16)}
+                  </p>
+                  {sh.notes && <p className="text-slate-600 dark:text-slate-300">{sh.notes}</p>}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Comments */}
+          <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <h2 className="font-display text-base font-bold">Observations &amp; Échanges ({comments.length})</h2>
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {comments.length === 0 ? (
+                <p className="text-xs text-slate-500">Aucune observation enregistrée.</p>
+              ) : (
+                comments.map((c) => (
+                  <div key={c.id} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-xs">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {c.user_name} ({c.user_role})
+                      </span>
+                      <span className="font-mono">{c.created_at.slice(0, 16)}</span>
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-200">{c.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            {actionLock.canAct ? (
+              <form onSubmit={handleAddComment} className="space-y-2">
+                <div className="flex gap-2">
+                  <select
+                    value={commentType}
+                    onChange={(e) => setCommentType(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  >
+                    <option value="OBSERVATION">Observation</option>
+                    <option value="DIFFICULTY">Signaler une difficulté</option>
+                    <option value="AVIS">Avis technique</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Ajouter une observation..."
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                Ajout de commentaire désactivé : ce dossier est en lecture seule tant qu’il n’est pas à votre niveau.
+              </p>
+            )}
+          </section>
+
+          {/* Immutable Audit History */}
+          <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+            <h2 className="font-display text-base font-bold">Journal de traçabilité (Audit immuable)</h2>
+            <div className="space-y-2.5 max-h-72 overflow-y-auto">
+              {auditLogs.map((a) => (
+                <div key={a.id} className="text-xs border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <div className="flex justify-between font-mono text-[11px] text-slate-400">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{a.action}</span>
+                    <span>{a.created_at.slice(0, 16)}</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 mt-0.5">
+                    {a.user_name} {a.context ? `— ${a.context}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "NEXORA",
+  "description": "Plateforme SaaS intelligente de gestion du courrier, numérisation IA et circuits administratifs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
