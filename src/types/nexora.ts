@@ -84,6 +84,10 @@ export interface CompanyInfo {
   max_storage_mb: number;
   max_mails_month: number;
   stamp_image?: string;
+  logo_url?: string;
+  primary_color?: string;
+  rccm?: string;
+  tagline?: string;
   billing_cycle?: 'MONTHLY' | 'ANNUAL';
   subscription_expires_at?: string;
 }

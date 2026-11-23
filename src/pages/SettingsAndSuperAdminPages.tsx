@@ -95,7 +95,12 @@ export function SettingsAndBillingPage() {
   const [error, setError] = useState('');
 
   const [form, setForm] = useState({
+    legalName: '',
     tradeName: '',
+    taxId: '',
+    rccm: '',
+    tagline: '',
+    website: '',
     city: '',
     address: '',
     phone: '',
@@ -105,6 +110,8 @@ export function SettingsAndBillingPage() {
     refPrefixInt: 'INT',
     retentionDays: 3650,
     stampImage: '',
+    logoUrl: '',
+    primaryColor: '#2563EB',
   });
 
   // Checkout state
@@ -162,16 +169,23 @@ export function SettingsAndBillingPage() {
       setGateway(pmRes.gateway);
       setTransactions(txRes.transactions);
       setForm({
-        tradeName: sRes.company.trade_name,
-        city: sRes.company.city,
-        address: sRes.company.address,
-        phone: sRes.company.phone,
-        email: sRes.company.email,
-        refPrefixIn: sRes.company.ref_prefix_in,
-        refPrefixOut: sRes.company.ref_prefix_out,
-        refPrefixInt: sRes.company.ref_prefix_int,
-        retentionDays: sRes.company.retention_days,
+        legalName: sRes.company.legal_name || '',
+        tradeName: sRes.company.trade_name || '',
+        taxId: sRes.company.tax_id || '',
+        rccm: sRes.company.rccm || '',
+        tagline: sRes.company.tagline || '',
+        website: sRes.company.website || '',
+        city: sRes.company.city || '',
+        address: sRes.company.address || '',
+        phone: sRes.company.phone || '',
+        email: sRes.company.email || '',
+        refPrefixIn: sRes.company.ref_prefix_in || 'ARR',
+        refPrefixOut: sRes.company.ref_prefix_out || 'DEP',
+        refPrefixInt: sRes.company.ref_prefix_int || 'INT',
+        retentionDays: sRes.company.retention_days || 3650,
         stampImage: sRes.company.stamp_image || '',
+        logoUrl: sRes.company.logo_url || '',
+        primaryColor: sRes.company.primary_color || '#2563EB',
       });
     } catch {
       // ignore
@@ -237,6 +251,17 @@ export function SettingsAndBillingPage() {
       setForm((prev) => ({ ...prev, stampImage: url }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur image cachet');
+    }
+  };
+
+  const handleUploadCompanyLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await readStampFileAsDataUrl(file);
+      setForm((prev) => ({ ...prev, logoUrl: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur image logo');
     }
   };
 
@@ -427,101 +452,298 @@ export function SettingsAndBillingPage() {
         </div>
       )}
 
-      {/* Company Settings & Official Stamp */}
-      <form onSubmit={handleSaveSettings} className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5">
-        <h2 className="font-display text-base font-bold">Paramètres de l’entreprise, Références &amp; Cachet officiel</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-medium mb-1">Nom commercial</label>
-            <input
-              type="text"
-              value={form.tradeName}
-              onChange={(e) => setForm({ ...form, tradeName: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Ville</label>
-            <input
-              type="text"
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Téléphone</label>
-            <input
-              type="text"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Préfixe Entrants</label>
-            <input
-              type="text"
-              maxLength={6}
-              value={form.refPrefixIn}
-              onChange={(e) => setForm({ ...form, refPrefixIn: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Préfixe Sortants</label>
-            <input
-              type="text"
-              maxLength={6}
-              value={form.refPrefixOut}
-              onChange={(e) => setForm({ ...form, refPrefixOut: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Préfixe Internes</label>
-            <input
-              type="text"
-              maxLength={6}
-              value={form.refPrefixInt}
-              onChange={(e) => setForm({ ...form, refPrefixInt: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Durée de conservation (jours)</label>
-            <input
-              type="number"
-              min={365}
-              value={form.retentionDays}
-              onChange={(e) => setForm({ ...form, retentionDays: Number(e.target.value) })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono"
-            />
-          </div>
-          <div className="sm:col-span-2 flex items-center gap-4 pt-2">
-            {form.stampImage ? (
-              <img
-                src={form.stampImage}
-                alt="Cachet officiel de l’entreprise"
-                className="w-16 h-16 rounded-lg border border-slate-200 bg-white p-1 object-contain"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400">
-                <Stamp className="w-6 h-6" />
+      {/* Company Settings, Branding & Official Stamp */}
+      <form onSubmit={handleSaveSettings} className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-6">
+        <div>
+          <h2 className="font-display text-base font-bold text-slate-900 dark:text-white">
+            Paramètres de l’organisation, Personnalisation &amp; Cachet officiel
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Personnalisez l’identité visuelle de votre application (logo, couleur dominante), les mentions institutionnelles et les règles de numérotation.
+          </p>
+        </div>
+
+        {/* 1. Identité Visuelle & Logo */}
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Identité Visuelle &amp; Documents Officiels</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Logo de l'entreprise */}
+            <div className="flex items-start gap-4">
+              {form.logoUrl ? (
+                <div className="relative group shrink-0">
+                  <img
+                    src={form.logoUrl}
+                    alt="Logo de l'organisation"
+                    className="w-20 h-20 rounded-xl border border-slate-200 bg-white p-1.5 object-contain shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, logoUrl: '' }))}
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 shadow"
+                    title="Supprimer le logo"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 shrink-0">
+                  <Upload className="w-6 h-6 stroke-1" />
+                  <span className="text-[10px] mt-1">Aucun logo</span>
+                </div>
+              )}
+              <div className="space-y-1.5 min-w-0">
+                <p className="text-xs font-semibold text-slate-900 dark:text-white">Logo de votre organisation</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Affiché dans l’en-tête de l’application, sur vos courriers générés et sur les bordereaux officiels.
+                </p>
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{form.logoUrl ? 'Changer le logo' : 'Téléverser le logo (PNG/SVG)'}</span>
+                  <input type="file" accept="image/*" onChange={handleUploadCompanyLogo} className="hidden" />
+                </label>
               </div>
-            )}
-            <div className="space-y-1">
-              <p className="text-xs font-semibold">Image du cachet officiel de l’organisation</p>
-              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Importer le cachet (PNG/SVG)</span>
-                <input type="file" accept="image/*" onChange={handleUploadCompanyStamp} className="hidden" />
-              </label>
+            </div>
+
+            {/* Cachet officiel */}
+            <div className="flex items-start gap-4">
+              {form.stampImage ? (
+                <div className="relative group shrink-0">
+                  <img
+                    src={form.stampImage}
+                    alt="Cachet officiel de l’entreprise"
+                    className="w-20 h-20 rounded-xl border border-slate-200 bg-white p-1.5 object-contain shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, stampImage: '' }))}
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 shadow"
+                    title="Supprimer le cachet"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 shrink-0">
+                  <Stamp className="w-6 h-6 stroke-1" />
+                  <span className="text-[10px] mt-1">Aucun cachet</span>
+                </div>
+              )}
+              <div className="space-y-1.5 min-w-0">
+                <p className="text-xs font-semibold text-slate-900 dark:text-white">Cachet officiel de l’organisation</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Apposé automatiquement lors des signatures électroniques et de la validation des courriers sortants.
+                </p>
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm">
+                  <Stamp className="w-3.5 h-3.5" />
+                  <span>{form.stampImage ? 'Changer le cachet' : 'Téléverser le cachet (PNG/SVG)'}</span>
+                  <input type="file" accept="image/*" onChange={handleUploadCompanyStamp} className="hidden" />
+                </label>
+              </div>
             </div>
           </div>
         </div>
-        <button type="submit" className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold">
-          Enregistrer les paramètres
+
+        {/* 2. Thème & Couleur Principale */}
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Couleur Principale de l'Application</h3>
+          <div className="flex flex-wrap items-center gap-3">
+            {[
+              { name: 'Bleu Institutionnel', hex: '#2563EB' },
+              { name: 'Indigo Moderne', hex: '#4F46E5' },
+              { name: 'Émeraude Souverain', hex: '#059669' },
+              { name: 'Pourpre Royal', hex: '#7C3AED' },
+              { name: 'Bordeaux Présidence', hex: '#DC2626' },
+              { name: 'Ardoise Prestige', hex: '#0F172A' },
+              { name: 'Ambre Sahélien', hex: '#D97706' },
+            ].map((c) => {
+              const isSelected = (form.primaryColor || '#2563EB').toLowerCase() === c.hex.toLowerCase();
+              return (
+                <button
+                  key={c.hex}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, primaryColor: c.hex }))}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                    isSelected
+                      ? 'border-slate-900 dark:border-white shadow-sm ring-2 ring-slate-900/20 dark:ring-white/20'
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-400'
+                  }`}
+                >
+                  <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: c.hex }} />
+                  <span>{c.name}</span>
+                </button>
+              );
+            })}
+
+            {/* Custom Color Input */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-300 dark:border-slate-700">
+              <input
+                type="color"
+                value={form.primaryColor || '#2563EB'}
+                onChange={(e) => setForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+                className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-transparent"
+                title="Choisir une couleur personnalisée"
+              />
+              <input
+                type="text"
+                maxLength={7}
+                value={form.primaryColor}
+                onChange={(e) => setForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+                placeholder="#2563EB"
+                className="w-24 px-2 py-1 text-xs font-mono uppercase rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Informations Légales & Coordonnées */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">3. Informations Officielles &amp; Fiscales</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1">Raison sociale (Nom légal officiel)</label>
+              <input
+                type="text"
+                value={form.legalName}
+                onChange={(e) => setForm({ ...form, legalName: e.target.value })}
+                placeholder="Ex: Ministère du Travail / Groupe Bénin SA"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Nom d'usage / Commercial</label>
+              <input
+                type="text"
+                value={form.tradeName}
+                onChange={(e) => setForm({ ...form, tradeName: e.target.value })}
+                placeholder="Ex: MTFP Bénin"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Devise / Slogan institutionnel</label>
+              <input
+                type="text"
+                value={form.tagline}
+                onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+                placeholder="Ex: Fraternité - Justice - Travail"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Identifiant Fiscal Unique (IFU)</label>
+              <input
+                type="text"
+                value={form.taxId}
+                onChange={(e) => setForm({ ...form, taxId: e.target.value })}
+                placeholder="Ex: 0202416892049"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Numéro RCCM</label>
+              <input
+                type="text"
+                value={form.rccm}
+                onChange={(e) => setForm({ ...form, rccm: e.target.value })}
+                placeholder="Ex: RB/COT/24 B 39482"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Site Web institutionnel</label>
+              <input
+                type="url"
+                value={form.website}
+                onChange={(e) => setForm({ ...form, website: e.target.value })}
+                placeholder="https://organisation.bj"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Ville &amp; Siège</label>
+              <input
+                type="text"
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                placeholder="Ex: Cotonou"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Adresse physique</label>
+              <input
+                type="text"
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                placeholder="Ex: Boulevard de la Marina"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Téléphone officiel</label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+229 21 00 00 00"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Formats de Numérotation & Archivage */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">4. Formats de Numérotation &amp; Archivage Légal</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1">Préfixe Courriers Entrants</label>
+              <input
+                type="text"
+                maxLength={6}
+                value={form.refPrefixIn}
+                onChange={(e) => setForm({ ...form, refPrefixIn: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Préfixe Courriers Sortants</label>
+              <input
+                type="text"
+                maxLength={6}
+                value={form.refPrefixOut}
+                onChange={(e) => setForm({ ...form, refPrefixOut: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Préfixe Notes Internes</label>
+              <input
+                type="text"
+                maxLength={6}
+                value={form.refPrefixInt}
+                onChange={(e) => setForm({ ...form, refPrefixInt: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono uppercase"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Durée conservation légale (jours)</label>
+              <input
+                type="number"
+                min={365}
+                value={form.retentionDays}
+                onChange={(e) => setForm({ ...form, retentionDays: Number(e.target.value) })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm"
+        >
+          Enregistrer tous les paramètres
         </button>
       </form>
 

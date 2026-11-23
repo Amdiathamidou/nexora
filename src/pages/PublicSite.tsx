@@ -56,8 +56,7 @@ export function PublicSite({ onGoLogin, onGoRegister }: PublicSiteProps) {
             <img 
               src="/logo-nexora.png" 
               alt="Nexora" 
-              className="w-10 h-10 rounded-xl object-cover shadow-sm bg-indigo-50 border border-indigo-100" 
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              className="h-10 w-auto max-w-[160px] object-contain drop-shadow-sm shrink-0" 
             />
             <span className="font-extrabold text-2xl tracking-tight text-slate-900">
               NEXORA
@@ -521,7 +520,7 @@ export function PublicSite({ onGoLogin, onGoRegister }: PublicSiteProps) {
       <footer className="py-12 bg-slate-950 text-slate-400 text-sm border-t border-slate-900">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <img src="/logo-nexora.png" alt="Nexora" className="w-8 h-8 rounded-lg object-cover" />
+            <img src="/logo-nexora.png" alt="Nexora" className="h-8 w-auto object-contain shrink-0" />
             <span className="font-bold text-white tracking-tight">NEXORA SAAS</span>
             <span className="text-xs text-slate-500">· Cotonou, République du Bénin</span>
           </div>

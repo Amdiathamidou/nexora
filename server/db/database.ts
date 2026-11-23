@@ -446,6 +446,10 @@ export function initSchema(): void {
   safeAddCol('users', "signature_image TEXT DEFAULT ''");
   safeAddCol('users', "stamp_image TEXT DEFAULT ''");
   safeAddCol('companies', "stamp_image TEXT DEFAULT ''");
+  safeAddCol('companies', "logo_url TEXT DEFAULT ''");
+  safeAddCol('companies', "primary_color TEXT DEFAULT '#2563EB'");
+  safeAddCol('companies', "rccm TEXT DEFAULT ''");
+  safeAddCol('companies', "tagline TEXT DEFAULT ''");
   safeAddCol('companies', "billing_cycle TEXT DEFAULT 'MONTHLY'");
   safeAddCol('companies', "subscription_expires_at TEXT DEFAULT ''");
   safeAddCol('mail_signatures', "is_delegated INTEGER NOT NULL DEFAULT 0");

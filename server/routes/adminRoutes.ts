@@ -1074,16 +1074,23 @@ adminRoutes.patch('/settings', requireAuth, requireCompanyScope, requireRoles('A
     phone,
     email,
     website,
+    taxId,
+    rccm,
+    primaryColor,
+    tagline,
     refPrefixIn,
     refPrefixOut,
     refPrefixInt,
     retentionDays,
     stampImage,
+    logoUrl,
   } = req.body ?? {};
 
   let validStamp: string | null = null;
+  let validLogo: string | null = null;
   try {
     validStamp = validateImageDataUrl(stampImage, 'Le cachet de l’entreprise');
+    validLogo = validateImageDataUrl(logoUrl, 'Le logo de l’entreprise');
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Format d’image invalide.' });
     return;
@@ -1100,11 +1107,16 @@ adminRoutes.patch('/settings', requireAuth, requireCompanyScope, requireRoles('A
         phone = COALESCE(?, phone),
         email = COALESCE(?, email),
         website = COALESCE(?, website),
+        tax_id = COALESCE(?, tax_id),
+        rccm = COALESCE(?, rccm),
+        primary_color = COALESCE(?, primary_color),
+        tagline = COALESCE(?, tagline),
         ref_prefix_in = COALESCE(?, ref_prefix_in),
         ref_prefix_out = COALESCE(?, ref_prefix_out),
         ref_prefix_int = COALESCE(?, ref_prefix_int),
         retention_days = COALESCE(?, retention_days),
-        stamp_image = COALESCE(?, stamp_image)
+        stamp_image = COALESCE(?, stamp_image),
+        logo_url = COALESCE(?, logo_url)
     WHERE id = ?
   `).run(
     legalName ?? null,
@@ -1116,11 +1128,16 @@ adminRoutes.patch('/settings', requireAuth, requireCompanyScope, requireRoles('A
     phone ?? null,
     email ?? null,
     website ?? null,
+    taxId ?? null,
+    rccm ?? null,
+    primaryColor ?? null,
+    tagline ?? null,
     refPrefixIn ? String(refPrefixIn).toUpperCase().slice(0, 6) : null,
     refPrefixOut ? String(refPrefixOut).toUpperCase().slice(0, 6) : null,
     refPrefixInt ? String(refPrefixInt).toUpperCase().slice(0, 6) : null,
     retentionDays ?? null,
     validStamp,
+    validLogo,
     companyId
   );
 

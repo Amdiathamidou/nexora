@@ -1,32 +1,30 @@
 interface NexoraLogoProps {
   className?: string;
   showText?: boolean;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function NexoraLogo({ className = '', showText = true }: NexoraLogoProps) {
+export function NexoraLogo({ className = '', showText = true, size = 'md' }: NexoraLogoProps) {
+  const heights = {
+    sm: 'h-6',
+    md: 'h-8 sm:h-9',
+    lg: 'h-11 sm:h-12',
+    xl: 'h-14 sm:h-16',
+  };
+
   return (
     <span className={`inline-flex items-center gap-2.5 whitespace-nowrap shrink-0 ${className}`}>
-      <svg
-        width="28"
-        height="28"
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-        className="shrink-0"
-      >
-        <rect width="32" height="32" rx="7" className="fill-slate-900 dark:fill-blue-600" />
-        <path
-          d="M9 22V10L16 17.5L23 10V22"
-          stroke="#FFFFFF"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path d="M9 10H23" stroke="#60A5FA" strokeWidth="1.6" strokeLinecap="round" strokeOpacity="0.65" />
-      </svg>
+      <img
+        src="/logo-nexora.png"
+        alt="NEXORA"
+        className={`${heights[size]} w-auto object-contain shrink-0 drop-shadow-sm`}
+        onError={(e) => {
+          // Si l'image n'est pas trouvée, afficher le secours SVG
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+        }}
+      />
       {showText && (
-        <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+        <span className="font-display text-lg font-black tracking-tight text-slate-900 dark:text-white">
           NEXORA
         </span>
       )}
