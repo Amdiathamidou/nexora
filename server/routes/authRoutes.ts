@@ -206,7 +206,7 @@ authRoutes.post('/register-company', (req: AuthenticatedRequest, res: Response) 
       JSON.stringify(adminPerms)
     );
 
-    createDefaultServicesAndCircuits(companyId, adminUserId);
+    createDefaultServicesAndCircuits(companyId, adminUserId, String(aData.jobTitle || ''));
   })();
 
   const authUser = loadAuthUser(adminUserId)!;

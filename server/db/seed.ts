@@ -108,33 +108,41 @@ export function seedDefaultPlans(): void {
   );
 }
 
-export function createDefaultServicesAndCircuits(companyId: string, adminUserId: string): { secretariatServiceId: string } {
+export function createDefaultServicesAndCircuits(
+  companyId: string,
+  adminUserId: string,
+  adminJobTitle?: string
+): { secretariatServiceId: string } {
+  const serviceName = adminJobTitle && adminJobTitle.trim() ? adminJobTitle.trim() : 'Direction / Administration';
   const secId = `svc_sec_${companyId}`;
-  const dgId = `svc_dg_${companyId}`;
-  const rhId = `svc_rh_${companyId}`;
-  const finId = `svc_fin_${companyId}`;
 
   const insSvc = db.prepare(`
     INSERT INTO services (id, company_id, name, description, manager_user_id, is_secretariat, reception_rules)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  insSvc.run(secId, companyId, 'Secrétariat', 'Réception, numérisation IA, orientation, contrôle final et expédition.', adminUserId, 1, 'Point d’entrée et de retour obligatoire des courriers.');
-  insSvc.run(dgId, companyId, 'Direction générale', 'Coordination opérationnelle et arbitrages de direction.', null, 0, 'Dossiers transverses et notes de direction.');
-  insSvc.run(rhId, companyId, 'Ressources humaines', 'Gestion administrative du personnel et recrutements.', null, 0, 'Demandes RH et correspondances sociales.');
-  insSvc.run(finId, companyId, 'Direction financière', 'Facturation, engagements budgétaires et trésorerie.', null, 0, 'Factures fournisseurs et dossiers financiers.');
+  // Crée UNIQUEMENT le service / département initial de l'administrateur
+  insSvc.run(
+    secId,
+    companyId,
+    serviceName,
+    `Service initial rattaché au poste : ${serviceName}`,
+    adminUserId,
+    1,
+    'Point d’entrée principal pour la gestion et le traitement des courriers.'
+  );
 
-  db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(adminUserId, secId, companyId);
-  // Note: Admin is NOT auto-assigned to Direction Générale — only to Secrétariat by default.
+  db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(
+    adminUserId,
+    secId,
+    companyId
+  );
 
   const stepsIn: CircuitStepConfig[] = [
-    { stepOrder: 1, name: 'Réception & enregistrement Secrétariat', stepType: 'SECRETARIAT_RECEPTION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 4 },
-    { stepOrder: 2, name: 'Orientation vers service compétent', stepType: 'ORIENTATION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 8 },
-    { stepOrder: 3, name: 'Affectation par le Responsable', stepType: 'RESPONSABLE_ASSIGN', mode: 'SEQUENTIAL', targetRole: 'RESPONSABLE', slaHours: 12 },
-    { stepOrder: 4, name: 'Traitement par l’Agent', stepType: 'AGENT_TREATMENT', mode: 'SEQUENTIAL', targetRole: 'AGENT', slaHours: 48 },
-    { stepOrder: 5, name: 'Contrôle du Responsable', stepType: 'RESPONSABLE_REVIEW', mode: 'SEQUENTIAL', targetRole: 'RESPONSABLE', slaHours: 24 },
-    { stepOrder: 6, name: 'Retour obligatoire au Secrétariat — Contrôle final', stepType: 'SECRETARIAT_RETURN', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 12 },
-    { stepOrder: 7, name: 'Expédition / Classement et Archivage', stepType: 'SECRETARIAT_DISPATCH_ARCHIVE', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 12 },
+    { stepOrder: 1, name: 'Réception & enregistrement', stepType: 'SECRETARIAT_RECEPTION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 4 },
+    { stepOrder: 2, name: 'Orientation & traitement', stepType: 'ORIENTATION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 8 },
+    { stepOrder: 3, name: 'Validation / Signature', stepType: 'RESPONSABLE_REVIEW', mode: 'SEQUENTIAL', targetRole: 'RESPONSABLE', slaHours: 24 },
+    { stepOrder: 4, name: 'Expédition / Classement et Archivage', stepType: 'SECRETARIAT_DISPATCH_ARCHIVE', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: secId, slaHours: 12 },
   ];
 
   const cId = `cir_std_${companyId}`;
@@ -142,7 +150,7 @@ export function createDefaultServicesAndCircuits(companyId: string, adminUserId:
   db.prepare(`
     INSERT INTO circuits (id, company_id, name, description, category, mail_direction, current_version, is_active)
     VALUES (?, ?, ?, ?, ?, 'ENTRANT', 1, 1)
-  `).run(cId, companyId, 'Courrier entrant standard', 'Circuit complet avec retour obligatoire au Secrétariat.', 'Administration générale');
+  `).run(cId, companyId, 'Circuit standard initial', 'Circuit rattaché au service initial de l’entreprise.', 'Administration générale');
   db.prepare(`
     INSERT INTO circuit_versions (id, circuit_id, company_id, version_number, steps_json)
     VALUES (?, ?, ?, 1, ?)
