@@ -1219,16 +1219,17 @@ adminRoutes.post('/subscription/confirm', requireAuth, requireCompanyScope, requ
 });
 
 adminRoutes.post('/webhooks/payment', async (req: AuthenticatedRequest, res: Response) => {
-  const { transactionId, companyId, kkiapayTransactionId } = req.body ?? {};
+  const { transactionId, companyId, fedaTransactionId, kkiapayTransactionId } = req.body ?? {};
+  const externalRef = fedaTransactionId || kkiapayTransactionId;
   if (!transactionId || !companyId) {
-    res.status(400).json({ error: 'Paramètres webhook Kkiapay incomplets.' });
+    res.status(400).json({ error: 'Paramètres webhook de paiement incomplets.' });
     return;
   }
   try {
     const systemActor = {
       id: 'webhook',
       companyId: String(companyId),
-      fullName: 'Passerelle Kkiapay',
+      fullName: 'Passerelle FedaPay',
       jobTitle: 'Webhook',
       email: 'billing@nexora.bj',
       avatarUrl: '',
@@ -1240,19 +1241,19 @@ adminRoutes.post('/webhooks/payment', async (req: AuthenticatedRequest, res: Res
     const tx = db
       .prepare('SELECT provider FROM payment_transactions WHERE id = ? AND company_id = ?')
       .get(String(transactionId), String(companyId)) as { provider: string } | undefined;
-    if (!tx || tx.provider !== 'KKIAPAY') {
-      res.status(400).json({ error: 'Webhook réservé aux transactions Kkiapay vérifiées.' });
+    if (!tx) {
+      res.status(400).json({ error: 'Transaction introuvable.' });
       return;
     }
     const result = await confirmAndVerifyPayment({
       companyId: String(companyId),
       transactionId: String(transactionId),
       actor: systemActor,
-      otpOrAuthorizationCode: kkiapayTransactionId ? String(kkiapayTransactionId) : undefined,
+      otpOrAuthorizationCode: externalRef ? String(externalRef) : undefined,
     });
     res.json({ ok: true, receiptNumber: result.receiptNumber });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Vérification webhook Kkiapay refusée.' });
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Vérification webhook de paiement refusée.' });
   }
 });
 
