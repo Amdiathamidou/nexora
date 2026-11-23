@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { PDFParse } from 'pdf-parse';
 import { db } from '../db/database.ts';
 
 const execFileAsync = promisify(execFile);
@@ -50,10 +51,24 @@ function getAiClient(): GoogleGenAI | null {
 }
 
 /**
- * Extraction de texte brut du fichier via Tesseract OCR ou extraction de chaînes ASCII/UTF-8
+ * Extraction de texte brut du fichier via PDFParse (PDF décompressé), Tesseract OCR ou extraction de chaînes
  */
 async function extractRawTextFromFile(filePath: string): Promise<string> {
-  // 1. Tesseract OCR si disponible (Windows)
+  // 1. Décompression et extraction intégrale des pages PDF via PDFParse
+  if (filePath.toLowerCase().endsWith('.pdf')) {
+    try {
+      const buf = fs.readFileSync(filePath);
+      const parser = new PDFParse(new Uint8Array(buf));
+      const pdfData = await parser.getText();
+      if (pdfData && pdfData.text && pdfData.text.trim().length > 15) {
+        return pdfData.text.trim();
+      }
+    } catch (pdfErr) {
+      console.warn('[extractRawTextFromFile] PDFParse warning :', pdfErr);
+    }
+  }
+
+  // 2. Tesseract OCR si disponible (Windows)
   const tesseractPath = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
   if (fs.existsSync(tesseractPath)) {
     try {
@@ -66,7 +81,7 @@ async function extractRawTextFromFile(filePath: string): Promise<string> {
     }
   }
 
-  // 2. Extraction brute des chaînes de texte lisibles contenues dans le binaire (pour PDF textuels)
+  // 3. Extraction brute des chaînes de texte lisibles contenues dans le binaire (pour PDF textuels)
   try {
     const buf = fs.readFileSync(filePath);
     const str = buf.toString('latin1');
@@ -147,7 +162,7 @@ ${contentToAnalyze}`;
         model: 'qwen/qwen3.8-27b',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
-        max_tokens: 1500,
+        max_tokens: 800,
       }),
     });
     clearTimeout(timeoutId);
