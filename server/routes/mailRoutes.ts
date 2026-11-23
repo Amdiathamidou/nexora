@@ -73,7 +73,7 @@ mailRoutes.post('/ai/analyze', requireAuth, requireCompanyScope, async (req: Aut
 
     // Recherche de doublons potentiels
     const duplicates = findPotentialDuplicateMails({
-      companyId: user.companyId,
+      companyId: user.companyId || '',
       externalRef: extraction.externalRef,
       senderName: extraction.senderName,
       mailDate: extraction.mailDate,

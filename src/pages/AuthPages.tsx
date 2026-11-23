@@ -13,52 +13,12 @@ interface AuthPagesProps {
 const DEMO_ACCOUNTS = [
   { id: 'usr_demo_admin', label: 'Admin Entreprise', name: 'Codjo Dossou', email: 'admin@nexorademo.bj' },
   { id: 'usr_demo_president', label: 'Président', name: 'Sébastien Houngbédji', email: 'president@nexorademo.bj' },
-  { id: 'usr_demo_resp_fin', label: 'Responsable Finances', name: 'Aminata Zinsou', email: 'finances@nexorademo.bj' },
-  { id: 'usr_demo_resp_jur', label: 'Responsable Juridique', name: 'Me Brice Agbessi', email: 'juridique@nexorademo.bj' },
+  { id: 'usr_demo_resp_fin', label: 'Resp. Finances', name: 'Aminata Zinsou', email: 'finances@nexorademo.bj' },
+  { id: 'usr_demo_resp_jur', label: 'Resp. Juridique', name: 'Me Brice Agbessi', email: 'juridique@nexorademo.bj' },
   { id: 'usr_demo_agent_sec', label: 'Secrétariat Central', name: 'Nadine Kpadonou', email: 'secretariat@nexorademo.bj' },
   { id: 'usr_demo_agent_fin', label: 'Agent Finances', name: 'Romuald Boko', email: 'agent.finances@nexorademo.bj' },
   { id: 'usr_superadmin', label: 'Super Admin NEXORA', name: 'Koffi Mensah', email: 'superadmin@nexora.bj' },
 ];
-
-// ─── Shared micro-styles ──────────────────────────────────────────────────────
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '13px 16px 13px 46px',
-  border: '1.5px solid #e2e8f0',
-  borderRadius: 13,
-  fontSize: '0.95rem',
-  fontFamily: 'inherit',
-  color: '#1e293b',
-  background: '#f8fafc',
-  outline: 'none',
-  boxSizing: 'border-box',
-  transition: 'border-color .2s, box-shadow .2s',
-};
-const inputSimple: React.CSSProperties = {
-  ...inputStyle,
-  paddingLeft: 16,
-};
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontWeight: 600,
-  fontSize: '0.88rem',
-  color: '#475569',
-  marginBottom: 8,
-};
-const btnPrimary: React.CSSProperties = {
-  width: '100%',
-  padding: '15px 24px',
-  border: 'none',
-  borderRadius: 13,
-  background: 'linear-gradient(135deg,#4F46E5,#7C3AED)',
-  color: '#fff',
-  fontFamily: 'inherit',
-  fontSize: '1rem',
-  fontWeight: 700,
-  cursor: 'pointer',
-  boxShadow: '0 8px 24px rgba(79,70,229,.3)',
-  transition: 'all .3s ease',
-};
 
 export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
   const { login, demoLogin, registerCompany } = useAuth();
@@ -66,19 +26,19 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Login state
+  // Login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Forgot password state
+  // Forgot password
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [resetMessage, setResetMessage] = useState('');
 
-  // Company Registration state
+  // Register
   const [companyForm, setCompanyForm] = useState({
     legalName: '',
     tradeName: '',
@@ -164,348 +124,427 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
     finally { setSubmitting(false); }
   };
 
-  /* ──────────────────────────────────── LEFT PANEL ──────────────────────── */
-  const LeftPanel = () => (
-    <div
-      className="hidden lg:flex flex-col justify-between flex-shrink-0 relative overflow-hidden"
-      style={{ width: 420, background: 'linear-gradient(160deg,#4F46E5 0%,#7C3AED 50%,#6366F1 100%)', padding: '50px 40px', color: '#fff' }}
-    >
-      {/* grid bg */}
-      <div style={{ position: 'absolute', inset: 0, opacity: 0.04,
-        backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)',
-        backgroundSize: '40px 40px' }} />
-      <div style={{ position: 'absolute', top: -100, right: -100, width: 350, height: 350, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50" style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
+      {/* ─── PANNEAU GAUCHE DÉCORATIF ET COMPACT (≥ lg) ─── */}
+      <div className="hidden lg:flex flex-col justify-between w-96 xl:w-[420px] bg-gradient-to-br from-indigo-700 via-indigo-600 to-purple-700 text-white p-8 relative overflow-hidden flex-shrink-0">
+        {/* Background Grid Pattern */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+        
+        {/* En-tête panneau */}
+        <div className="relative z-10 flex items-center gap-3">
+          <img
+            src="/logo-nexora.png"
+            alt="Nexora"
+            className="w-10 h-10 rounded-xl object-cover bg-white/20 p-1 shadow-md"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+          <span className="font-extrabold text-2xl tracking-tight">NEXORA</span>
+        </div>
 
-      {/* brand */}
-      <div className="relative z-10 flex items-center gap-3">
-        <img src="/logo-nexora.png" alt="Nexora"
-          style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', background: 'rgba(255,255,255,.2)', padding: 2 }}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-        <span style={{ fontWeight: 800, fontSize: 22, letterSpacing: -0.5 }}>NEXORA</span>
-      </div>
+        {/* Message contextuel */}
+        <div className="relative z-10 my-auto py-8">
+          <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold mb-4 backdrop-blur-sm">
+            Plateforme IA Documentaire
+          </span>
+          <h2 className="text-3xl font-extrabold leading-tight mb-4">
+            {mode === 'login' ? 'Votre courrier, notre intelligence.' : 'Rejoignez NEXORA dès aujourd’hui.'}
+          </h2>
+          <p className="text-indigo-100 text-sm leading-relaxed mb-6">
+            Gestion sécurisée des courriers, reconnaissance optique OCR Gemini, circuits d’approbation et traçabilité légale.
+          </p>
 
-      {/* body */}
-      <div className="relative z-10">
-        {mode === 'login' && (
-          <>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.2, letterSpacing: -1, marginBottom: 14 }}>
-              Votre courrier,<br />notre intelligence.
-            </h2>
-            <p style={{ fontSize: '1rem', opacity: 0.8, lineHeight: 1.7, maxWidth: 320 }}>
-              Accédez à votre tableau de bord et gérez vos courriers avec l'aide de l'intelligence artificielle Gemini.
-            </p>
-            <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                { icon: '🤖', label: 'Extraction IA automatique (OCR Gemini)' },
-                { icon: '📄', label: 'Circuits de validation et workflows' },
-                { icon: '🔒', label: 'Données isolées par entreprise' },
-              ].map((f) => (
-                <div key={f.label} className="flex items-center gap-4"
-                  style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 14 }}>
-                  <span style={{ fontSize: 20, width: 38, height: 38, background: 'rgba(255,255,255,0.12)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{f.icon}</span>
-                  <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>{f.label}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        {mode === 'register' && (
-          <>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.18)', backdropFilter: 'blur(8px)', padding: '8px 16px', borderRadius: 99, fontSize: 13, fontWeight: 700, border: '1px solid rgba(255,255,255,.25)', marginBottom: 24 }}>
-              ✨ Essai gratuit 14 jours
-            </div>
-            <h2 style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1.2, letterSpacing: -1, marginBottom: 14 }}>
-              Rejoignez NEXORA<br />dès aujourd'hui.
-            </h2>
-            <p style={{ fontSize: '0.95rem', opacity: 0.8, lineHeight: 1.7, maxWidth: 320 }}>
-              Créez l'espace de votre organisation et commencez à gérer vos courriers intelligemment.
-            </p>
+          <div className="space-y-3">
             {[
-              { icon: '🚀', title: 'Démarrage immédiat', desc: 'En moins de 2 minutes' },
-              { icon: '🧠', title: 'IA Gemini intégrée', desc: 'OCR et extraction auto' },
-              { icon: '📧', title: 'Notifications email', desc: 'Alertes aux chefs de service' },
-            ].map((b) => (
-              <div key={b.title} className="flex gap-3 mt-5">
-                <div style={{ width: 38, height: 38, background: 'rgba(255,255,255,.15)', borderRadius: 10, display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>{b.icon}</div>
+              { icon: '🤖', title: 'OCR & Extraction IA Gemini', desc: 'Préremplissage instantané' },
+              { icon: '🔄', title: 'Workflows & Approbations', desc: 'Circuits d’avis et signatures' },
+              { icon: '🔒', title: 'Données cloisonnées', desc: 'Confinement par entreprise' },
+            ].map((f) => (
+              <div key={f.title} className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/10 rounded-xl p-3">
+                <span className="text-lg w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">{f.icon}</span>
                 <div>
-                  <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>{b.title}</p>
-                  <p style={{ opacity: 0.7, fontSize: '0.82rem' }}>{b.desc}</p>
+                  <div className="text-xs font-bold text-white">{f.title}</div>
+                  <div className="text-[11px] text-indigo-200">{f.desc}</div>
                 </div>
               </div>
             ))}
-          </>
-        )}
-        {mode === 'forgot' && (
-          <>
-            <h2 style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1.2, marginBottom: 14 }}>Récupération<br />d'accès</h2>
-            <p style={{ fontSize: '0.95rem', opacity: 0.8, lineHeight: 1.7 }}>
-              Saisissez votre adresse e-mail. Vous recevrez un code à usage unique pour réinitialiser votre mot de passe.
-            </p>
-          </>
-        )}
+          </div>
+        </div>
+
+        {/* Pied de panneau */}
+        <div className="relative z-10 text-[11px] text-indigo-200">
+          NEXORA &copy; {new Date().getFullYear()} · Tous droits réservés
+        </div>
       </div>
-    </div>
-  );
 
-  /* ──────────────────────────────────────────────────────────────────────── */
-  return (
-    <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif" }}>
-      <LeftPanel />
+      {/* ─── PANNEAU DROIT FORMULAIRE COMPACT ─── */}
+      <div className="flex-1 flex flex-col justify-center items-center p-4 sm:p-8 overflow-y-auto">
+        <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
+          
+          {/* Top Bar Mobile Brand & Back */}
+          <div className="flex items-center justify-between mb-6">
+            <button
+              type="button"
+              onClick={onBackPublic}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Retour au site</span>
+            </button>
 
-      {/* RIGHT PANEL */}
-      <div
-        className="flex-1 flex items-center justify-center overflow-y-auto"
-        style={{ background: mode === 'register' ? '#f8fafc' : '#fff', padding: '40px 24px' }}
-      >
-        <div style={{ width: '100%', maxWidth: mode === 'register' ? 680 : 420 }}>
-
-          {/* Mobile brand */}
-          <div className="flex lg:hidden items-center gap-3 mb-10">
-            <img src="/logo-nexora.png" alt="Nexora"
-              style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover' }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-            <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.5 }}>NEXORA</span>
+            <div className="flex lg:hidden items-center gap-2">
+              <img src="/logo-nexora.png" alt="Nexora" className="w-6 h-6 rounded-md object-cover" />
+              <span className="font-extrabold text-sm text-slate-900">NEXORA</span>
+            </div>
           </div>
 
-          {/* Back button */}
-          <button type="button" onClick={onBackPublic}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 32 }}>
-            <ArrowLeft className="w-4 h-4" /> Retour au site
-          </button>
-
-          {/* ═══ LOGIN ═══════════════════════════════════════════════════════ */}
+          {/* ══════════════ CONNEXION ══════════════ */}
           {mode === 'login' && (
-            <>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>Bon retour 👋</h1>
-              <p style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 32, lineHeight: 1.6 }}>
-                Connectez-vous pour accéder à votre espace de gestion.
-              </p>
+            <div>
+              <div className="mb-6">
+                <h1 className="text-2xl font-extrabold text-slate-900">Bon retour 👋</h1>
+                <p className="text-xs text-slate-500 mt-1">Connectez-vous à l'espace de votre organisation.</p>
+              </div>
 
               {error && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 14, marginBottom: 24, color: '#991B1B', fontSize: '0.88rem' }}>
-                  ⚠️ <span>{error}</span>
+                <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{error}</span>
                 </div>
               )}
 
-              <form onSubmit={handleLogin}>
-                {/* Email */}
-                <label style={labelStyle}>Adresse e-mail</label>
-                <div style={{ position: 'relative', marginBottom: 20 }}>
-                  <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#94a3b8' }}>✉️</span>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="vous@organisation.com" style={inputStyle} />
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Adresse e-mail</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nom@organisation.bj"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                  />
                 </div>
 
-                {/* Password */}
-                <label style={labelStyle}>Mot de passe</label>
-                <div style={{ position: 'relative', marginBottom: 20 }}>
-                  <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#94a3b8' }}>🔒</span>
-                  <input type={showPassword ? 'text' : 'password'} required value={password}
-                    onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
-                    style={{ ...inputStyle, paddingRight: 50 }} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">Mot de passe</label>
+                    <button
+                      type="button"
+                      onClick={() => { setError(''); setMode('forgot'); }}
+                      className="text-xs font-semibold text-indigo-600 hover:underline"
+                    >
+                      Oublié ?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Extras */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
-                    <input type="checkbox" style={{ width: 18, height: 18, accentColor: '#4F46E5' }} />
-                    Se souvenir de moi
-                  </label>
-                  <button type="button" onClick={() => { setError(''); setMode('forgot'); }}
-                    style={{ color: '#4F46E5', fontSize: '0.88rem', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    Mot de passe oublié ?
-                  </button>
-                </div>
-
-                <button type="submit" disabled={submitting} style={btnPrimary}>
-                  {submitting ? 'Connexion...' : 'Se connecter →'}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-600/30 transition-all disabled:opacity-60"
+                >
+                  {submitting ? 'Connexion en cours...' : 'Se connecter'}
                 </button>
               </form>
 
-              {/* Divider */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '28px 0', color: '#94a3b8', fontSize: '0.82rem' }}>
-                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} /> ou <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-              </div>
-
-              {/* Demo accounts */}
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '16px 20px' }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <ShieldCheck className="w-4 h-4" style={{ color: '#4F46E5' }} />
-                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#4F46E5' }}>Environnement DÉMO · Cotonou, Bénin</span>
+              {/* Rôles de Démo Compact */}
+              <div className="mt-6 pt-5 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 mb-2">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Accès rapide DÉMO (Cotonou, Bénin)</span>
                 </div>
-                <p style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 12 }}>
-                  Testez les parcours complets (<strong>Demo2026!</strong> / Super Admin : <strong>Nexora2026!</strong>)
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button key={acc.id} type="button" disabled={submitting} onClick={() => handleDemoLogin(acc.id)}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', textAlign: 'left', transition: 'all .2s' }}
-                      onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#4F46E5'; b.style.background = '#EEF2FF'; }}
-                      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#e2e8f0'; b.style.background = '#fff'; }}>
-                      <div>
-                        <p style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0f172a', margin: 0 }}>{acc.label}</p>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>{acc.name} · {acc.email}</p>
-                      </div>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4F46E5', flexShrink: 0, marginLeft: 12 }}>Ouvrir</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DEMO_ACCOUNTS.slice(0, 6).map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => handleDemoLogin(acc.id)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-left hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-[11px] truncate"
+                    >
+                      <span className="font-bold text-slate-800 block truncate">{acc.label}</span>
+                      <span className="text-slate-400 block truncate">{acc.name}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <p style={{ textAlign: 'center', marginTop: 24, fontSize: '0.88rem', color: '#64748b' }}>
-                Pas encore d'espace ?{' '}
-                <button type="button" onClick={() => { setError(''); setMode('register'); }}
-                  style={{ color: '#4F46E5', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  Créer un compte — Essai gratuit 14 jours →
+              <div className="mt-5 text-center text-xs text-slate-500">
+                Pas encore de compte ?{' '}
+                <button
+                  type="button"
+                  onClick={() => { setError(''); setMode('register'); }}
+                  className="font-bold text-indigo-600 hover:underline"
+                >
+                  Essai gratuit 14 jours
                 </button>
-              </p>
-            </>
+              </div>
+            </div>
           )}
 
-          {/* ═══ FORGOT PASSWORD ═════════════════════════════════════════════ */}
-          {mode === 'forgot' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4F46E5', marginBottom: 8 }}>
-                <KeyRound className="w-5 h-5" />
-                <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Récupération d'accès</span>
+          {/* ══════════════ INSCRIPTION COMPACTE ══════════════ */}
+          {mode === 'register' && (
+            <div>
+              <div className="mb-5">
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 mb-1">
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>Essai gratuit 14 jours</span>
+                </div>
+                <h1 className="text-xl font-extrabold text-slate-900">Inscrire votre organisation</h1>
+                <p className="text-xs text-slate-500 mt-0.5">Premier compte administrateur initialisé.</p>
               </div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', marginBottom: 24 }}>Mot de passe oublié</h1>
+
+              {error && (
+                <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <form onSubmit={handleRegister} className="space-y-4">
+                {/* Bloc 1 : Société */}
+                <div className="space-y-2.5">
+                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">1. L’ENTREPRISE</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Dénomination sociale *"
+                        value={companyForm.legalName}
+                        onChange={(e) => setCompanyForm({ ...companyForm, legalName: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Secteur *"
+                        value={companyForm.sector}
+                        onChange={(e) => setCompanyForm({ ...companyForm, sector: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <select
+                        value={companyForm.legalForm}
+                        onChange={(e) => setCompanyForm({ ...companyForm, legalForm: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      >
+                        <option>SARL</option><option>SA</option><option>SAS</option>
+                        <option>Institution Publique</option><option>ONG / Association</option>
+                      </select>
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Pays *"
+                        value={companyForm.country}
+                        onChange={(e) => setCompanyForm({ ...companyForm, country: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ville *"
+                        value={companyForm.city}
+                        onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="email"
+                        required
+                        placeholder="E-mail professionnel entreprise *"
+                        value={companyForm.email}
+                        onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bloc 2 : Admin */}
+                <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">2. L’ADMINISTRATEUR</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom & Prénom *"
+                        value={adminForm.fullName}
+                        onChange={(e) => setAdminForm({ ...adminForm, fullName: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Fonction *"
+                        value={adminForm.jobTitle}
+                        onChange={(e) => setAdminForm({ ...adminForm, jobTitle: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="email"
+                        required
+                        placeholder="E-mail de connexion *"
+                        value={adminForm.email}
+                        onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        placeholder="Mot de passe (8+ car.) *"
+                        value={adminForm.password}
+                        onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        placeholder="Confirmer mot de passe *"
+                        value={adminForm.confirmPassword}
+                        onChange={(e) => setAdminForm({ ...adminForm, confirmPassword: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-600/30 transition-all disabled:opacity-60"
+                >
+                  {submitting ? 'Création de l’espace...' : 'Démarrer l’essai gratuit (14 jours)'}
+                </button>
+              </form>
+
+              <div className="mt-4 text-center text-xs text-slate-500">
+                Déjà inscrit ?{' '}
+                <button
+                  type="button"
+                  onClick={() => { setError(''); setMode('login'); }}
+                  className="font-bold text-indigo-600 hover:underline"
+                >
+                  Se connecter
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════ MOT DE PASSE OUBLIÉ ══════════════ */}
+          {mode === 'forgot' && (
+            <div>
+              <div className="mb-6">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 mb-1">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Récupération</span>
+                </div>
+                <h1 className="text-xl font-extrabold text-slate-900">Mot de passe oublié</h1>
+              </div>
 
               {resetStep === 1 ? (
-                <form onSubmit={handleRequestReset}>
-                  <label style={labelStyle}>Adresse e-mail du compte</label>
-                  <div style={{ position: 'relative', marginBottom: 20 }}>
-                    <input type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} style={inputSimple} />
+                <form onSubmit={handleRequestReset} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">E-mail du compte</label>
+                    <input
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 outline-none"
+                      placeholder="vous@organisation.bj"
+                    />
                   </div>
-                  {error && <p style={{ fontSize: '0.82rem', color: '#dc2626', marginBottom: 16 }}>{error}</p>}
-                  <button type="submit" disabled={submitting} style={btnPrimary}>
-                    {submitting ? 'Envoi...' : 'Recevoir un code de réinitialisation'}
+                  {error && <div className="text-xs text-red-600">{error}</div>}
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
+                  >
+                    {submitting ? 'Envoi...' : 'Recevoir le code'}
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handleConfirmReset}>
-                  {resetMessage && <p style={{ fontSize: '0.82rem', color: '#059669', background: '#ecfdf5', padding: '10px 14px', borderRadius: 10, marginBottom: 16 }}>{resetMessage}</p>}
-                  <label style={labelStyle}>Code à 6 chiffres</label>
-                  <div style={{ position: 'relative', marginBottom: 20 }}>
-                    <input type="text" required value={resetCode} onChange={(e) => setResetCode(e.target.value)}
-                      style={{ ...inputSimple, fontFamily: 'monospace', letterSpacing: 4 }} />
+                <form onSubmit={handleConfirmReset} className="space-y-4">
+                  {resetMessage && <div className="text-xs text-emerald-700 bg-emerald-50 p-3 rounded-xl">{resetMessage}</div>}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Code à 6 chiffres</label>
+                    <input
+                      type="text"
+                      required
+                      value={resetCode}
+                      onChange={(e) => setResetCode(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm tracking-widest text-center font-mono focus:border-indigo-600 outline-none"
+                    />
                   </div>
-                  <label style={labelStyle}>Nouveau mot de passe (min. 8 car.)</label>
-                  <div style={{ position: 'relative', marginBottom: 20 }}>
-                    <input type="password" required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputSimple} />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Nouveau mot de passe (8+ car.)</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 outline-none"
+                    />
                   </div>
-                  {error && <p style={{ fontSize: '0.82rem', color: '#dc2626', marginBottom: 16 }}>{error}</p>}
-                  <button type="submit" disabled={submitting} style={btnPrimary}>
-                    {submitting ? 'Réinitialisation...' : 'Réinitialiser le mot de passe'}
+                  {error && <div className="text-xs text-red-600">{error}</div>}
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
+                  >
+                    {submitting ? 'Validation...' : 'Réinitialiser le mot de passe'}
                   </button>
                 </form>
               )}
 
-              <button type="button" onClick={() => { setMode('login'); setError(''); setResetStep(1); }}
-                style={{ display: 'block', marginTop: 20, fontSize: '0.88rem', color: '#4F46E5', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError(''); setResetStep(1); }}
+                className="mt-4 text-xs font-bold text-indigo-600 hover:underline block text-center w-full"
+              >
                 ← Retour à la connexion
               </button>
-            </>
+            </div>
           )}
 
-          {/* ═══ REGISTER ════════════════════════════════════════════════════ */}
-          {mode === 'register' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4F46E5', marginBottom: 4 }}>
-                <Building2 className="w-4 h-4" />
-                <span style={{ fontWeight: 700, fontSize: '0.78rem' }}>Création d'espace entreprise · Essai gratuit 14 jours</span>
-              </div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>Inscrire votre organisation</h1>
-              <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: 32, lineHeight: 1.6 }}>
-                Le premier utilisateur créé devient automatiquement Administrateur et les services de base sont initialisés.
-              </p>
-
-              <form onSubmit={handleRegister}>
-                {/* ── Entreprise ── */}
-                <h2 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: 10, marginBottom: 20 }}>
-                  1. Informations de l'entreprise
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ marginBottom: 32 }}>
-                  {[
-                    { label: 'Dénomination sociale *', key: 'legalName', type: 'text', required: true, span: true },
-                    { label: 'Nom commercial', key: 'tradeName', type: 'text' },
-                    { label: "Secteur d'activité *", key: 'sector', type: 'text', required: true },
-                    { label: 'Pays *', key: 'country', type: 'text', required: true },
-                    { label: 'Ville *', key: 'city', type: 'text', required: true },
-                    { label: 'Téléphone professionnel', key: 'phone', type: 'tel' },
-                    { label: 'E-mail professionnel *', key: 'email', type: 'email', required: true },
-                    { label: 'Site internet', key: 'website', type: 'url', placeholder: 'https://...' },
-                    { label: 'IFU / RCCM', key: 'taxId', type: 'text' },
-                  ].map((f) => (
-                    <div key={f.key} className={f.span ? 'sm:col-span-2' : ''}>
-                      <label style={labelStyle}>{f.label}</label>
-                      <input type={f.type} required={f.required} placeholder={f.placeholder}
-                        value={(companyForm as Record<string, string>)[f.key]}
-                        onChange={(e) => setCompanyForm({ ...companyForm, [f.key]: e.target.value })}
-                        style={inputSimple} />
-                    </div>
-                  ))}
-                  <div>
-                    <label style={labelStyle}>Forme juridique *</label>
-                    <select value={companyForm.legalForm} onChange={(e) => setCompanyForm({ ...companyForm, legalForm: e.target.value })} style={inputSimple}>
-                      <option>SARL</option><option>SA</option><option>SAS</option>
-                      <option>Institution Publique</option><option>ONG / Association</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label style={labelStyle}>Adresse complète</label>
-                    <input type="text" value={companyForm.address}
-                      onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} style={inputSimple} />
-                  </div>
-                </div>
-
-                {/* ── Admin ── */}
-                <h2 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: 10, marginBottom: 20 }}>
-                  2. Premier utilisateur (rôle Admin attribué automatiquement)
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ marginBottom: 24 }}>
-                  {[
-                    { label: 'Nom et prénom *', key: 'fullName', type: 'text', required: true },
-                    { label: 'Fonction *', key: 'jobTitle', type: 'text', required: true },
-                    { label: 'E-mail de connexion *', key: 'email', type: 'email', required: true },
-                    { label: 'Téléphone', key: 'phone', type: 'tel' },
-                    { label: 'Mot de passe (min. 8 car.) *', key: 'password', type: 'password', required: true, minLength: 8 },
-                    { label: 'Confirmation mot de passe *', key: 'confirmPassword', type: 'password', required: true, minLength: 8 },
-                  ].map((f) => (
-                    <div key={f.key}>
-                      <label style={labelStyle}>{f.label}</label>
-                      <input type={f.type} required={f.required} minLength={f.minLength}
-                        value={(adminForm as Record<string, string>)[f.key]}
-                        onChange={(e) => setAdminForm({ ...adminForm, [f.key]: e.target.value })}
-                        style={inputSimple} />
-                    </div>
-                  ))}
-                </div>
-
-                {error && (
-                  <div style={{ display: 'flex', gap: 10, padding: '12px 16px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, color: '#991B1B', fontSize: '0.88rem', marginBottom: 20 }}>
-                    ⚠️ {error}
-                  </div>
-                )}
-
-                <button type="submit" disabled={submitting} style={btnPrimary}>
-                  {submitting ? "Initialisation de l'espace..." : "Créer l'entreprise et démarrer l'essai gratuit (14 jours) →"}
-                </button>
-              </form>
-
-              <p style={{ textAlign: 'center', marginTop: 20, fontSize: '0.88rem', color: '#64748b' }}>
-                Déjà un compte ?{' '}
-                <button type="button" onClick={() => { setError(''); setMode('login'); }}
-                  style={{ color: '#4F46E5', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  Se connecter
-                </button>
-              </p>
-            </>
-          )}
         </div>
       </div>
     </div>

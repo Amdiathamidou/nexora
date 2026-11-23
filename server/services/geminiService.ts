@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { db } from '../db/database.ts';
 
 export interface AiExtractionPayload {
+  manualMode?: boolean; // true when Gemini is unavailable and user must saisir manuellement
   ocrText: string;
   senderName: string;
   senderOrg: string;
