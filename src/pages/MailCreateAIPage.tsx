@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  FileText,
   FileUp,
   Loader2,
   RotateCw,
@@ -32,6 +33,34 @@ interface DuplicateMatch {
   external_ref: string;
   mail_date: string;
   reason: string;
+}
+
+export const DOCUMENT_NATURE_OPTIONS = [
+  { value: 'lettre', label: '📄 Lettre administrative / Demande' },
+  { value: 'note', label: '📝 Note de service / Information' },
+  { value: 'rapport', label: '📊 Rapport d’activité / Compte-rendu' },
+  { value: 'facture', label: '💰 Facture / Bordereau financier' },
+  { value: 'convocation', label: '📋 Convocation / Invitation' },
+  { value: 'memo', label: '📌 Mémo / Mémorandum' },
+  { value: 'circulaire', label: '📢 Circulaire administrative' },
+  { value: 'instruction', label: '📜 Instruction / Décision' },
+  { value: 'contrat', label: '🗂️ Contrat / Convention' },
+  { value: 'autre', label: '📦 Autre document' },
+];
+
+export function normalizeDocumentNature(raw?: string): string {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s) return 'lettre';
+  if (s.includes('lettre') || s.includes('demande') || s.includes('courrier') || s.includes('requete') || s.includes('requête') || s.includes('autorisation')) return 'lettre';
+  if (s.includes('note')) return 'note';
+  if (s.includes('rapport') || s.includes('compte-rendu') || s.includes('bilan')) return 'rapport';
+  if (s.includes('facture') || s.includes('paiement') || s.includes('bordereau') || s.includes('devis')) return 'facture';
+  if (s.includes('convocation') || s.includes('invitation')) return 'convocation';
+  if (s.includes('memo') || s.includes('mémorandum') || s.includes('memorandum')) return 'memo';
+  if (s.includes('circulaire')) return 'circulaire';
+  if (s.includes('instruction') || s.includes('decision') || s.includes('décision') || s.includes('arrete') || s.includes('arrêté')) return 'instruction';
+  if (s.includes('contrat') || s.includes('convention') || s.includes('accord')) return 'contrat';
+  return 'autre';
 }
 
 interface UserOption {
@@ -73,7 +102,7 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
   // Registration form
   const [form, setForm] = useState({
     direction: 'ENTRANT' as MailDirection,
-    category: 'Lettre administrative',
+    category: 'lettre',
     subject: '',
     description: '',
     senderName: '',
@@ -318,7 +347,7 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
         dueDate: /^\d{4}-\d{2}-\d{2}$/.test(res.extraction.deadlineMentioned)
           ? res.extraction.deadlineMentioned
           : '',
-        category: res.extraction.category || form.category,
+        category: normalizeDocumentNature(res.extraction.mailNature || res.extraction.category),
         description: res.extraction.shortSummary || '',
       };
 
@@ -611,6 +640,19 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
 
               {extraction && (
                 <div className="space-y-3 text-xs">
+                  {/* Badge Nature du document & Priorité détectées par l'IA */}
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 pb-1">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>
+                        Nature détectée : {DOCUMENT_NATURE_OPTIONS.find((o) => o.value === form.category)?.label || extraction.mailNature || '📄 Lettre administrative'}
+                      </span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                      Priorité : {extraction.suggestedPriority || 'NORMALE'}
+                    </span>
+                  </div>
+
                   {extraction.readabilityWarning && (
                     <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300">
                       Attention lisibilité : {extraction.readabilityWarning}
@@ -779,13 +821,25 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">Catégorie</label>
-                <input
-                  type="text"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium">Nature du document</label>
+                  {extraction && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      ✨ Détecté : {DOCUMENT_NATURE_OPTIONS.find((o) => o.value === form.category)?.label.split(' ')[1] || 'Détecté'}
+                    </span>
+                  )}
+                </div>
+                <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-                />
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium"
+                >
+                  {DOCUMENT_NATURE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Priorité</label>
