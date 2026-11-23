@@ -1452,6 +1452,28 @@ export function SuperAdminPage() {
     await loadOverview();
   };
 
+  const deleteCompany = async (companyId: string, companyName: string) => {
+    const confirmation = window.prompt(
+      `Êtes-vous ABSOLUMENT certain de vouloir supprimer l'entreprise "${companyName}" ?\n\nTous ses utilisateurs, courriers, documents et historiques seront DÉFINITIVEMENT supprimés.\n\nTapez "SUPPRIMER" pour confirmer :`
+    );
+    if (confirmation !== 'SUPPRIMER') {
+      if (confirmation !== null) {
+        alert('Suppression annulée : mot-clé non reconnu.');
+      }
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/superadmin/companies/${companyId}`, {
+        method: 'DELETE',
+      });
+      await loadOverview();
+      alert(`L'entreprise "${companyName}" a été supprimée.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erreur lors de la suppression.');
+    }
+  };
+
   if (error) return <div className="p-6 text-sm text-red-600">{error}</div>;
   if (!data) return <div className="p-8 text-sm text-slate-500">Chargement de la console NEXORA...</div>;
 
@@ -1534,7 +1556,7 @@ export function SuperAdminPage() {
                 </td>
                 <td className="py-3 px-4 font-mono text-xs">{c.trial_ends_at}</td>
                 <td className="py-3 px-4 text-xs font-mono">{c.status}</td>
-                <td className="py-3 px-4 text-right space-x-2">
+                <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
                   {c.status !== 'active' && (
                     <button
                       type="button"
@@ -1548,11 +1570,19 @@ export function SuperAdminPage() {
                     <button
                       type="button"
                       onClick={() => changeStatus(c.id, 'suspended')}
-                      className="text-xs font-medium text-red-600 hover:underline"
+                      className="text-xs font-medium text-amber-600 hover:underline"
                     >
                       Suspendre
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => deleteCompany(c.id, c.legal_name)}
+                    className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline inline-flex items-center gap-1"
+                    title="Supprimer définitivement l'entreprise et ses données"
+                  >
+                    Supprimer
+                  </button>
                 </td>
               </tr>
             ))}

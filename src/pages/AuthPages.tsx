@@ -254,8 +254,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
 
         <div className="relative z-10">
           <a href="/" onClick={(e) => { e.preventDefault(); onBackPublic(); }} className="flex items-center gap-3 text-white text-2xl font-extrabold tracking-tight mb-8">
-            <img src="/logo-nexora.png" alt="Nexora" className="h-12 w-auto object-contain bg-white/20 p-1.5 rounded-xl shadow shrink-0" />
-            <span>Nexora</span>
+            <NexoraLogo size="lg" showText={true} />
           </a>
 
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 border border-white/25 text-white text-xs font-bold mb-6 backdrop-blur-sm">
@@ -347,7 +346,9 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
           {mode === 'login' && (
             <div className="max-w-md mx-auto">
               <div className="mb-6 flex flex-col items-center sm:items-start">
-                <img src="/logo-nexora.png" alt="Nexora" className="h-12 w-auto object-contain mb-3 shrink-0 drop-shadow-sm" />
+                <div className="flex justify-center mb-3">
+                  <NexoraLogo size="xl" showText={false} />
+                </div>
                 <h1 className="text-2xl font-extrabold text-slate-900">Bon retour 👋</h1>
                 <p className="text-sm text-slate-500 mt-1">Connectez-vous pour accéder à votre espace de gestion.</p>
               </div>
@@ -441,7 +442,9 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
           {mode === 'register' && (
             <div>
               <div className="mb-6 flex flex-col items-center sm:items-start">
-                <img src="/logo-nexora.png" alt="Nexora" className="h-12 w-auto object-contain mb-3 shrink-0 drop-shadow-sm" />
+                <div className="flex justify-center mb-3">
+                  <NexoraLogo size="xl" showText={false} />
+                </div>
                 <h1 className="text-2xl font-extrabold text-slate-900">Créer mon espace Nexora</h1>
                 <p className="text-sm text-slate-500 mt-1">
                   Bénéficiez de <strong>14 jours d'essai gratuit</strong> complet sans engagement.

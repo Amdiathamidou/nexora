@@ -1388,6 +1388,66 @@ adminRoutes.patch('/superadmin/companies/:id/plan', requireAuth, requireRoles('S
   res.json({ ok: true });
 });
 
+adminRoutes.delete('/superadmin/companies/:id', requireAuth, requireRoles('SUPER_ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  const id = String(req.params.id);
+  const company = db.prepare('SELECT id, legal_name, is_demo FROM companies WHERE id = ?').get(id) as { id: string; legal_name: string; is_demo?: number } | undefined;
+  if (!company) {
+    res.status(404).json({ error: 'Entreprise introuvable.' });
+    return;
+  }
+
+  // Transaction de suppression en cascade complète pour l'environnement de test / admin
+  const deleteTransaction = db.transaction(() => {
+    // 1. Objets liés aux courriers
+    db.prepare('DELETE FROM mail_signatures WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM mail_comments WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM mail_documents WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM ai_analyses WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM workflow_step_executions WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM workflow_instances WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM tasks WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?) OR company_id = ?').run(id, id);
+    db.prepare('DELETE FROM shipments WHERE mail_id IN (SELECT id FROM mails WHERE company_id = ?) OR company_id = ?').run(id, id);
+    db.prepare('DELETE FROM mails WHERE company_id = ?').run(id);
+
+    // 2. Circuits et versions
+    db.prepare('DELETE FROM circuit_versions WHERE circuit_id IN (SELECT id FROM circuits WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM circuits WHERE company_id = ?').run(id);
+
+    // 3. Délégations
+    db.prepare('DELETE FROM signature_delegations WHERE company_id = ?').run(id);
+
+    // 4. Notifications & logs
+    db.prepare('DELETE FROM notifications WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM email_logs WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM payment_transactions WHERE company_id = ?').run(id);
+
+    // 5. Relations utilisateurs - services
+    db.prepare('DELETE FROM user_services WHERE user_id IN (SELECT id FROM users WHERE company_id = ?)').run(id);
+    db.prepare('DELETE FROM services WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM users WHERE company_id = ?').run(id);
+
+    // 6. Audit logs
+    db.prepare('DELETE FROM audit_logs WHERE company_id = ?').run(id);
+
+    // 7. Supprimer l'entreprise
+    db.prepare('DELETE FROM companies WHERE id = ?').run(id);
+  });
+
+  deleteTransaction();
+
+  logAudit({
+    companyId: 'system',
+    userId: req.user!.id,
+    userName: req.user!.fullName,
+    action: 'SUPERADMIN_SUPPRESSION_ENTREPRISE',
+    entityType: 'COMPANY',
+    entityId: id,
+    oldValue: { legalName: company.legal_name },
+  });
+
+  res.json({ ok: true, message: `L'entreprise "${company.legal_name}" et toutes ses données associées ont été supprimées avec succès.` });
+});
+
 // ==================== PRESIDENTIAL SIGNATURE DELEGATION REGISTRY ====================
 
 // List delegations

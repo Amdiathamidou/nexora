@@ -53,14 +53,7 @@ export function PublicSite({ onGoLogin, onGoRegister }: PublicSiteProps) {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 transition-all">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <a href="#top" className="flex items-center gap-3 text-decoration-none">
-            <img 
-              src="/logo-nexora.png" 
-              alt="Nexora" 
-              className="h-10 w-auto max-w-[160px] object-contain drop-shadow-sm shrink-0" 
-            />
-            <span className="font-extrabold text-2xl tracking-tight text-slate-900">
-              NEXORA
-            </span>
+            <NexoraLogo size="lg" />
           </a>
 
           <nav className="hidden md:flex items-center gap-1 font-semibold text-sm text-slate-600">
@@ -520,8 +513,7 @@ export function PublicSite({ onGoLogin, onGoRegister }: PublicSiteProps) {
       <footer className="py-12 bg-slate-950 text-slate-400 text-sm border-t border-slate-900">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <img src="/logo-nexora.png" alt="Nexora" className="h-8 w-auto object-contain shrink-0" />
-            <span className="font-bold text-white tracking-tight">NEXORA SAAS</span>
+            <NexoraLogo size="md" />
             <span className="text-xs text-slate-500">· Cotonou, République du Bénin</span>
           </div>
 
