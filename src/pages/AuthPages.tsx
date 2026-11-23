@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Building, Building2, Check, Eye, EyeOff, Gift, KeyRound, Lock, ShieldCheck, Sparkles, Stars, UploadCloud, User } from 'lucide-react';
+import { NexoraLogo } from '../components/common/NexoraLogo.tsx';
 import { apiFetch } from '../api/client.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 

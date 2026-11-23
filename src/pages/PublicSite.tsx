@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Check, Shield, Sparkles, Cpu, FileText, Send, Mail, CheckCircle2, ChevronRight, Users, Inbox } from 'lucide-react';
+import { NexoraLogo } from '../components/common/NexoraLogo.tsx';
 import { apiFetch } from '../api/client.ts';
 import type { SubscriptionPlan } from '../types/nexora.ts';
 
