@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   CreditCard,
+  Download,
+  FileText,
   Printer,
   Receipt,
   ShieldAlert,
@@ -9,6 +11,7 @@ import {
   Smartphone,
   Stamp,
   Upload,
+  X,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -132,6 +135,7 @@ export function SettingsAndBillingPage() {
   const [otpCode, setOtpCode] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [receiptPreview, setReceiptPreview] = useState<PaymentTransactionItem | null>(null);
+  const [invoiceModalTx, setInvoiceModalTx] = useState<PaymentTransactionItem | null>(null);
   const pendingTxRef = useRef<typeof pendingTx>(null);
   const kkiapayListenerAttachedRef = useRef(false);
   pendingTxRef.current = pendingTx;
@@ -855,21 +859,31 @@ export function SettingsAndBillingPage() {
         {/* Receipt Preview Card */}
         {receiptPreview && (
           <div className="p-5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-emerald-700" />
                 <h3 className="font-display text-sm font-bold">
-                  Reçu officiel N° {receiptPreview.receipt_number}
+                  Reçu &amp; Facture acquittée N° {receiptPreview.receipt_number}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimer le reçu</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceModalTx(receiptPreview)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Télécharger la Facture Officielle (PDF)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Imprimer</span>
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
@@ -894,7 +908,7 @@ export function SettingsAndBillingPage() {
 
         {/* Payment History Table */}
         <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
-          <h3 className="font-display text-sm font-bold">Historique des transactions &amp; Reçus ({transactions.length})</h3>
+          <h3 className="font-display text-sm font-bold">Historique des transactions &amp; Factures ({transactions.length})</h3>
           {transactions.length === 0 ? (
             <p className="text-xs text-slate-500">Aucune transaction enregistrée pour le moment.</p>
           ) : (
@@ -902,12 +916,12 @@ export function SettingsAndBillingPage() {
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
-                    <th className="py-2 pr-3">Référence</th>
+                    <th className="py-2 pr-3">Réf. Transaction</th>
                     <th className="py-2 pr-3">Formule</th>
                     <th className="py-2 pr-3">Moyen / Compte</th>
                     <th className="py-2 pr-3">Montant</th>
                     <th className="py-2 pr-3">Statut</th>
-                    <th className="py-2 text-right">Reçu</th>
+                    <th className="py-2 text-right">Facture PDF &amp; Reçu</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -927,16 +941,22 @@ export function SettingsAndBillingPage() {
                         </span>
                       </td>
                       <td className="py-2.5 text-right font-mono">
-                        {tx.receipt_number ? (
-                          <button
-                            type="button"
-                            onClick={() => setReceiptPreview(tx)}
-                            className="text-blue-700 dark:text-blue-400 hover:underline"
-                          >
-                            {tx.receipt_number}
-                          </button>
+                        {tx.status === 'PAID' ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceModalTx(tx)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 text-[11px] font-semibold"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>Facture PDF</span>
+                            </button>
+                            {tx.receipt_number && (
+                              <span className="text-[11px] text-slate-400 font-normal">({tx.receipt_number})</span>
+                            )}
+                          </div>
                         ) : (
-                          '—'
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
                     </tr>
@@ -947,6 +967,186 @@ export function SettingsAndBillingPage() {
           )}
         </div>
       </section>
+
+      {/* Official Nexora Invoice Modal */}
+      {invoiceModalTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:p-0 print:bg-white print:static print:z-auto">
+          <div className="bg-white text-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col print:shadow-none print:w-full print:max-w-none print:rounded-none print:max-h-none">
+            {/* Top action bar (hidden in print) */}
+            <div className="flex items-center justify-between p-4 bg-slate-100 border-b border-slate-200 print:hidden shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-sm">
+                  Facture Officielle Nexora — {invoiceModalTx.receipt_number || invoiceModalTx.external_tx_ref}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer / Télécharger en PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceModalTx(null)}
+                  className="p-2 rounded-lg hover:bg-slate-200 text-slate-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Invoice Document Body */}
+            <div id="nexora-official-invoice" className="p-8 sm:p-12 space-y-8 bg-white font-sans text-slate-900 overflow-y-auto">
+              {/* Header : Nexora Brand & Meta */}
+              <div className="flex flex-wrap items-start justify-between gap-6 border-b-2 border-slate-900 pb-6">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xl tracking-wider">
+                      N
+                    </div>
+                    <div>
+                      <h1 className="font-display text-2xl font-black tracking-tight text-slate-900">NEXORA</h1>
+                      <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-widest">Afrique Technologies</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
+                    Plateforme Souveraine de Gestion Électronique de Courriers &amp; Workflows Institutionnels.
+                    <br />
+                    Cotonou, République du Bénin
+                    <br />
+                    <span className="font-mono text-[11px]">IFU : 0202416892049 · RCCM : RB/COT/24 B 39482</span>
+                  </p>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    FACTURE ACQUITTÉE
+                  </span>
+                  <p className="font-mono text-base font-bold text-slate-900 pt-1">
+                    FAC-{invoiceModalTx.receipt_number || invoiceModalTx.id.slice(-6).toUpperCase()}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Émise le : {invoiceModalTx.paid_at ? new Date(invoiceModalTx.paid_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('fr-FR')}
+                  </p>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Réf. FedaPay : {invoiceModalTx.external_tx_ref}
+                  </p>
+                </div>
+              </div>
+
+              {/* Client & Enterprise info */}
+              <div className="grid grid-cols-2 gap-8 text-xs">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px] mb-1.5">ORGANISATION ÉMETTRICE</p>
+                  <p className="font-bold text-slate-900 text-sm">NEXORA AFRIQUE TECHNOLOGIES SAS</p>
+                  <p className="text-slate-600 mt-0.5">Boulevard de la Marina, Immeuble Horizon</p>
+                  <p className="text-slate-600">Cotonou, Bénin</p>
+                  <p className="text-slate-600 font-mono mt-1">support@nexora.bj · +229 01 97 00 00 00</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100">
+                  <p className="font-bold text-blue-600 uppercase tracking-wider text-[10px] mb-1.5">CLIENT FACTURÉ</p>
+                  <p className="font-bold text-slate-900 text-sm">{company.legal_name || 'Organisation Cliente'}</p>
+                  {company.trade_name && <p className="text-slate-700">{company.trade_name}</p>}
+                  <p className="text-slate-600 mt-0.5">{company.city || 'Cotonou'}, République du Bénin</p>
+                  <p className="text-slate-600 font-mono mt-1">{company.email || 'Email non renseigné'} {company.phone ? `· ${company.phone}` : ''}</p>
+                </div>
+              </div>
+
+              {/* Line Items Table */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-4">Désignation de la prestation</th>
+                      <th className="py-3 px-4">Période</th>
+                      <th className="py-3 px-4 text-center">Quantité</th>
+                      <th className="py-3 px-4 text-right">Prix Unitaire HT</th>
+                      <th className="py-3 px-4 text-right">Total HT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr>
+                      <td className="py-4 px-4">
+                        <p className="font-bold text-slate-900 text-sm">
+                          Abonnement NEXORA Cloud GED — Formule {invoiceModalTx.plan_name || invoiceModalTx.plan_id}
+                        </p>
+                        <p className="text-slate-500 text-[11px] mt-0.5">
+                          Gestion dématérialisée des courriers, circuits de visas, parapheur électronique et archivage sécurisé.
+                        </p>
+                      </td>
+                      <td className="py-4 px-4 font-mono text-slate-700">
+                        {invoiceModalTx.billing_cycle === 'ANNUAL' ? '12 Mois' : '1 Mois'}
+                      </td>
+                      <td className="py-4 px-4 text-center font-mono">1</td>
+                      <td className="py-4 px-4 text-right font-mono tabular-nums">
+                        {invoiceModalTx.amount_fcfa.toLocaleString('fr-FR')} FCFA
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono font-bold tabular-nums">
+                        {invoiceModalTx.amount_fcfa.toLocaleString('fr-FR')} FCFA
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-slate-200 bg-slate-50/50">
+                      <td colSpan={3} className="py-2.5 px-4"></td>
+                      <td className="py-2.5 px-4 text-right text-slate-600 font-medium">Total Hors Taxe (HT) :</td>
+                      <td className="py-2.5 px-4 text-right font-mono tabular-nums font-semibold">
+                        {invoiceModalTx.amount_fcfa.toLocaleString('fr-FR')} FCFA
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50/50">
+                      <td colSpan={3} className="py-2.5 px-4"></td>
+                      <td className="py-2.5 px-4 text-right text-slate-600 font-medium">TVA (Exonération TIC / Zone UEMOA) :</td>
+                      <td className="py-2.5 px-4 text-right font-mono tabular-nums text-slate-500">0 FCFA</td>
+                    </tr>
+                    <tr className="border-t-2 border-slate-900 bg-slate-900 text-white font-bold">
+                      <td colSpan={3} className="py-3 px-4 uppercase text-[11px] tracking-wider">
+                        Total Règlement TTC Réglé
+                      </td>
+                      <td colSpan={2} className="py-3 px-4 text-right font-mono text-base tabular-nums">
+                        {invoiceModalTx.amount_fcfa.toLocaleString('fr-FR')} FCFA
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Payment confirmation details & stamp */}
+              <div className="grid grid-cols-2 gap-8 items-end pt-2 text-xs border-t border-slate-200">
+                <div className="space-y-1.5 text-slate-600">
+                  <p className="font-bold text-slate-900 uppercase tracking-wider text-[10px]">MODALITÉ DE PAIEMENT SÉCURISÉ</p>
+                  <p>Moyen : <span className="font-semibold text-slate-900">{invoiceModalTx.payment_method}</span> ({invoiceModalTx.payer_account_mask})</p>
+                  <p>Passerelle : <span className="font-semibold text-slate-900">FedaPay Bénin (UEMOA)</span></p>
+                  <p className="font-mono text-[11px]">Identifiant FedaPay : {invoiceModalTx.external_tx_ref}</p>
+                  <p className="text-[11px] text-slate-400 pt-1">
+                    Cette facture électronique tient lieu de quittance définitive de paiement pour la période souscrite.
+                  </p>
+                </div>
+
+                <div className="text-right space-y-2">
+                  <p className="font-bold text-slate-900 text-xs">POUR NEXORA AFRIQUE TECHNOLOGIES</p>
+                  <div className="inline-block p-3 rounded-xl border border-emerald-300 bg-emerald-50/80 text-center">
+                    <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest">
+                      CERTIFIÉ CONFORME &amp; ACQUITTÉ
+                    </div>
+                    <div className="font-mono text-[11px] text-emerald-700 mt-0.5">
+                      NEXORA DIRECTION FINANCIÈRE
+                    </div>
+                    <div className="text-[9px] text-emerald-600 mt-1 font-mono">
+                      SIG-SHA256: {invoiceModalTx.id.slice(0, 16).toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Company Audit Log */}
       <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
