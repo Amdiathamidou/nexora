@@ -1173,7 +1173,11 @@ adminRoutes.post('/subscription/checkout', requireAuth, requireCompanyScope, req
     return;
   }
   const cycle: BillingCycle = validCycles.includes(billingCycle) ? billingCycle : 'MONTHLY';
-  const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+  const rawAppUrl = process.env.APP_URL?.trim();
+  const validAppUrl = rawAppUrl && !rawAppUrl.includes('MY_APP_URL') && (rawAppUrl.startsWith('http://') || rawAppUrl.startsWith('https://'))
+    ? rawAppUrl
+    : `http://${req.get('host') || 'localhost:3000'}`;
+  const appBaseUrl = validAppUrl;
 
   try {
     const result = await initiateSubscriptionCheckout({
