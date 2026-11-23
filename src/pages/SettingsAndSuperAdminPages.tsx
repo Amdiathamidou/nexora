@@ -176,7 +176,41 @@ export function SettingsAndBillingPage() {
 
   useEffect(() => {
     loadAll();
-  }, [loadAll]);
+
+    // Traitement automatique du retour client depuis la passerelle FedaPay
+    const searchParams = new URLSearchParams(window.location.search);
+    const statusParam = searchParams.get('status')?.toLowerCase();
+    const fedaId = searchParams.get('id');
+
+    if (fedaId) {
+      if (statusParam === 'declined' || statusParam === 'canceled') {
+        setError(
+          `Le paiement a été ${statusParam === 'declined' ? 'refusé' : 'annulé'} par FedaPay (Transaction N° ${fedaId}). Aucun montant n'a été débité et votre abonnement n'a pas été activé.`
+        );
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (statusParam === 'approved') {
+        setFeedback(`Transaction N° ${fedaId} validée par FedaPay. Vérification sécurisée et activation de votre formule...`);
+        apiFetch<{ receiptNumber: string; expiresAt: string; transaction: PaymentTransactionItem }>('/api/subscription/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ fedaTransactionId: fedaId }),
+        })
+          .then(async (res) => {
+            setFeedback(`Paiement FedaPay confirmé avec succès ! Reçu N° ${res.receiptNumber} émis. Abonnement activé jusqu’au ${res.expiresAt}.`);
+            setReceiptPreview(res.transaction);
+            window.history.replaceState({}, '', window.location.pathname);
+            await refreshSession();
+            await loadAll();
+          })
+          .catch((err) => {
+            setError(err instanceof Error ? err.message : 'Échec de validation de la transaction FedaPay.');
+            window.history.replaceState({}, '', window.location.pathname);
+          });
+      } else if (statusParam === 'pending') {
+        setError(`La transaction N° ${fedaId} est toujours en attente (pending) sur FedaPay. L'abonnement ne sera activé qu'après validation effective.`);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [loadAll, refreshSession]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +277,14 @@ export function SettingsAndBillingPage() {
       setOtpCode('');
       setCardNumber('');
       setCardCvv('');
+
+      // Redirection automatique immédiate vers l'URL officielle FedaPay (Point 3)
+      if (res.checkoutUrl) {
+        setFeedback(`Transaction N° ${res.externalTxRef} initialisée. Redirection vers le guichet FedaPay...`);
+        window.location.href = res.checkoutUrl;
+        return;
+      }
+
       setFeedback(`Transaction ${res.externalTxRef} initiée. Finalisez la validation pour activer votre abonnement.`);
       await loadAll();
     } catch (err) {
@@ -497,7 +539,7 @@ export function SettingsAndBillingPage() {
             </p>
           </div>
           <span className="text-xs font-mono px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-            Passerelle : {gateway.provider === 'KKIAPAY' ? `Kkiapay ${gateway.isLive ? '(Production)' : '(Sandbox Kkiapay)'}` : 'Sandbox UEMOA (Clés Kkiapay à configurer)'}
+            Passerelle : {gateway.provider === 'FEDAPAY' ? `FedaPay ${gateway.isLive ? '(Production)' : '(Sandbox FedaPay)'}` : 'Sandbox UEMOA'}
           </span>
         </div>
 

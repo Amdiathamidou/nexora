@@ -1202,17 +1202,18 @@ adminRoutes.post('/subscription/checkout', requireAuth, requireCompanyScope, req
 adminRoutes.post('/subscription/confirm', requireAuth, requireCompanyScope, requireRoles('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
   const actor = req.user!;
   const companyId = actor.companyId!;
-  const { transactionId, otpOrAuthorizationCode } = req.body ?? {};
+  const { transactionId, fedaTransactionId, otpOrAuthorizationCode } = req.body ?? {};
 
-  if (!transactionId) {
-    res.status(400).json({ error: 'Identifiant de transaction requis.' });
+  if (!transactionId && !fedaTransactionId) {
+    res.status(400).json({ error: 'Identifiant de transaction (Nexora ou FedaPay) requis.' });
     return;
   }
 
   try {
     const result = await confirmAndVerifyPayment({
       companyId,
-      transactionId: String(transactionId),
+      transactionId: transactionId ? String(transactionId) : undefined,
+      fedaTransactionId: fedaTransactionId ? String(fedaTransactionId) : undefined,
       actor,
       otpOrAuthorizationCode: otpOrAuthorizationCode ? String(otpOrAuthorizationCode) : undefined,
     });
@@ -1222,44 +1223,61 @@ adminRoutes.post('/subscription/confirm', requireAuth, requireCompanyScope, requ
   }
 });
 
-adminRoutes.post('/webhooks/payment', async (req: AuthenticatedRequest, res: Response) => {
-  const { transactionId, companyId, fedaTransactionId, kkiapayTransactionId } = req.body ?? {};
-  const externalRef = fedaTransactionId || kkiapayTransactionId;
-  if (!transactionId || !companyId) {
-    res.status(400).json({ error: 'Paramètres webhook de paiement incomplets.' });
+const handleFedaPayWebhook = async (req: AuthenticatedRequest, res: Response) => {
+  const event = req.body?.name || req.body?.event;
+  const entity = req.body?.entity || req.body?.transaction || req.body?.data || req.body;
+  const fedaId = entity?.id;
+  const fedaStatus = String(entity?.status || '').toLowerCase();
+
+  console.log(`[FedaPay Webhook] Event: ${event}, ID: ${fedaId}, Status: ${fedaStatus}`);
+
+  if (!fedaId) {
+    res.status(400).json({ error: 'ID de transaction introuvable dans le payload webhook.' });
     return;
   }
+
   try {
-    const systemActor = {
-      id: 'webhook',
-      companyId: String(companyId),
-      fullName: 'Passerelle FedaPay',
-      jobTitle: 'Webhook',
-      email: 'billing@nexora.bj',
-      avatarUrl: '',
-      role: 'ADMIN' as const,
-      permissions: {},
-      isSecretariat: false,
-      serviceIds: [],
-    };
-    const tx = db
-      .prepare('SELECT provider FROM payment_transactions WHERE id = ? AND company_id = ?')
-      .get(String(transactionId), String(companyId)) as { provider: string } | undefined;
-    if (!tx) {
-      res.status(400).json({ error: 'Transaction introuvable.' });
+    if (fedaStatus === 'approved' || event === 'transaction.approved') {
+      const systemActor = {
+        id: 'fedapay-webhook',
+        companyId: '',
+        fullName: 'Serveur Webhook FedaPay',
+        jobTitle: 'Passerelle Paiement',
+        email: 'webhook@fedapay.com',
+        avatarUrl: '',
+        role: 'ADMIN' as const,
+        permissions: {},
+        isSecretariat: false,
+        serviceIds: [],
+      };
+      const result = await confirmAndVerifyPayment({
+        fedaTransactionId: fedaId,
+        actor: systemActor,
+      });
+      res.json({ ok: true, status: 'approved', receiptNumber: result.receiptNumber });
       return;
     }
-    const result = await confirmAndVerifyPayment({
-      companyId: String(companyId),
-      transactionId: String(transactionId),
-      actor: systemActor,
-      otpOrAuthorizationCode: externalRef ? String(externalRef) : undefined,
-    });
-    res.json({ ok: true, receiptNumber: result.receiptNumber });
+
+    if (fedaStatus === 'declined' || fedaStatus === 'canceled' || event === 'transaction.declined' || event === 'transaction.canceled') {
+      const newStatus = fedaStatus === 'declined' || event === 'transaction.declined' ? 'DECLINED' : 'CANCELED';
+      db.prepare(`
+        UPDATE payment_transactions
+        SET status = ?
+        WHERE external_tx_ref = ? OR json_extract(metadata_json, '$.fedaId') = ?
+      `).run(newStatus, String(fedaId), Number(fedaId));
+      res.json({ ok: true, status: newStatus });
+      return;
+    }
+
+    res.json({ ok: true, status: 'ignored' });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Vérification webhook de paiement refusée.' });
+    console.error('[FedaPay Webhook Error]', err);
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur traitement webhook' });
   }
-});
+};
+
+adminRoutes.post('/webhooks/fedapay', handleFedaPayWebhook);
+adminRoutes.post('/webhooks/payment', handleFedaPayWebhook);
 
 adminRoutes.post('/subscription/request', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const actor = req.user!;
