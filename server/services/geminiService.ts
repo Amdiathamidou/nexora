@@ -318,6 +318,8 @@ export async function analyzeMailDocumentWithGemini(args: {
   mimeType: string;
   companyServices: Array<{ id: string; name: string }>;
   companyName: string;
+  browserText?: string;
+  pageImageBase64?: string;
 }): Promise<AiExtractionPayload> {
   if (!fs.existsSync(args.filePath)) {
     throw new Error('Document introuvable sur le serveur.');
@@ -331,18 +333,58 @@ export async function analyzeMailDocumentWithGemini(args: {
   const serviceNames = args.companyServices.map((s) => s.name).join(', ');
   const filename = path.basename(args.filePath);
 
-  // 1. Extraction du texte brut (PDFParse pour PDF, Tesseract OCR pour images)
-  const rawText = await extractRawTextFromFile(args.filePath);
+  let rawText = '';
 
-  // 2. Moteur IA Groq LPU (identique à XAMPP)
-  let result = await analyzeWithGroqEngine({
-    rawText,
-    serviceNames,
-    companyName: args.companyName,
-    filename,
-  });
+  // 1. Si le texte provient directement du navigateur (PDF.js textLayer ou OCR canvas)
+  if (args.browserText && args.browserText.trim().length >= 15) {
+    rawText = sanitizeTextForAI(args.browserText);
+  }
 
-  // 3. Fallback Heuristique garanti (zéro crash, zéro blocage)
+  // 2. Si pas de texte et qu'une image de page a été transmise (scanné)
+  if (!rawText && args.pageImageBase64) {
+    try {
+      const base64Data = args.pageImageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const tempImgPath = path.join(path.dirname(args.filePath), `temp_ocr_${Date.now()}.jpg`);
+      fs.writeFileSync(tempImgPath, Buffer.from(base64Data, 'base64'));
+      const tesseractPath = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
+      if (fs.existsSync(tesseractPath)) {
+        const { stdout } = await execFileAsync(tesseractPath, [tempImgPath, 'stdout', '-l', 'eng'], { timeout: 15000 });
+        if (stdout && stdout.trim().length > 10) {
+          rawText = sanitizeTextForAI(stdout);
+        }
+      }
+      try { fs.unlinkSync(tempImgPath); } catch {}
+    } catch (e) {
+      console.warn('[analyzeMailDocumentWithGemini] Erreur OCR image page :', e);
+    }
+  }
+
+  // 3. Sinon, tentative d'extraction directe du fichier (PDFParse ou Tesseract fichier direct)
+  if (!rawText) {
+    rawText = await extractRawTextFromFile(args.filePath);
+  }
+
+  // 4. Moteur IA Groq LPU (identique à XAMPP)
+  let result: Partial<AiExtractionPayload> | null = null;
+  if (rawText && rawText.length >= 20) {
+    result = await analyzeWithGroqEngine({
+      rawText,
+      serviceNames,
+      companyName: args.companyName,
+      filename,
+    });
+    // Si la réponse de Groq indique un document sans texte exploitable, basculer sur fallback
+    if (
+      result &&
+      (result.shortSummary?.toLowerCase().includes('sans contenu textuel') ||
+       result.shortSummary?.toLowerCase().includes('vide ou illisible') ||
+       result.subject?.toLowerCase().includes('sans contenu'))
+    ) {
+      result = null;
+    }
+  }
+
+  // 5. Fallback Heuristique garanti (zéro crash, zéro message de document vide)
   if (!result) {
     result = analyzeHeuristicFallback(filename, rawText, args.companyServices, args.companyName);
   }

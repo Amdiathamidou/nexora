@@ -67,6 +67,8 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
   // Left preview viewer controls
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const originalFileRef = useRef<File | null>(null);
 
   // Registration form
   const [form, setForm] = useState({
@@ -143,18 +145,102 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
     return 'Scan OCR et extraction terminés à 100 %';
   };
 
+  const renderPdfToContainer = async (
+    file: File,
+    scale = 1.0,
+    rotationDeg = 0
+  ): Promise<{ text: string; page1Base64?: string }> => {
+    const container = pdfContainerRef.current;
+    if (!container) return { text: '' };
+    container.innerHTML = '';
+    const w = window as unknown as { pdfjsLib?: { getDocument: (opts: unknown) => { promise: Promise<any> } } };
+    if (!w.pdfjsLib) return { text: '' };
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = w.pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+      let page1Base64 = '';
+
+      const containerWidth = Math.max(300, (container.clientWidth || 500) - 24);
+
+      for (let pageNum = 1; pageNum <= Math.min(pdf.numPages, 10); pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const baseViewport = page.getViewport({ scale: 1, rotation: rotationDeg });
+        const fitScale = (containerWidth / baseViewport.width) * scale;
+        const viewport = page.getViewport({ scale: fitScale, rotation: rotationDeg });
+
+        const pageWrapper = document.createElement('div');
+        pageWrapper.className = 'relative mb-4 bg-white shadow-lg rounded overflow-hidden border border-slate-200 dark:border-slate-700';
+        pageWrapper.style.width = `${viewport.width}px`;
+        pageWrapper.style.height = `${viewport.height}px`;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.display = 'block';
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        }
+
+        if (pageNum === 1) {
+          try {
+            page1Base64 = canvas.toDataURL('image/jpeg', 0.85);
+          } catch {}
+        }
+
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((i: any) => i.str).join(' ').trim();
+        fullText += ' ' + pageText;
+
+        pageWrapper.appendChild(canvas);
+        container.appendChild(pageWrapper);
+      }
+
+      return { text: fullText.trim(), page1Base64 };
+    } catch (err) {
+      console.warn('[renderPdfToContainer] Erreur PDF.js :', err);
+      return { text: '' };
+    }
+  };
+
+  useEffect(() => {
+    if (originalFileRef.current && (previewMimeType === 'application/pdf' || originalFileRef.current.name.toLowerCase().endsWith('.pdf'))) {
+      renderPdfToContainer(originalFileRef.current, zoom, rotation).catch(() => {});
+    }
+  }, [zoom, rotation]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    originalFileRef.current = file;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     const localBlobUrl = URL.createObjectURL(file);
     setPreviewUrl(localBlobUrl);
-    setPreviewMimeType(file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png'));
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    setPreviewMimeType(file.type || (isPdf ? 'application/pdf' : 'image/png'));
     setUploading(true);
     setScanProgress(4);
     setAiError('');
     setExtraction(null);
     setDuplicates([]);
+
+    let clientText = '';
+    let page1Img = '';
+
+    // Rendu haute fidélité PDF.js comme dans XAMPP Nexora
+    if (isPdf) {
+      try {
+        const rendered = await renderPdfToContainer(file, zoom, rotation);
+        clientText = rendered.text;
+        page1Img = rendered.page1Base64 || '';
+      } catch (e) {
+        console.warn('Erreur rendu PDF initial :', e);
+      }
+    }
+
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -164,7 +250,7 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
       });
       setUploadedFile(uploaded);
       setUploading(false);
-      await runAiAnalysis(uploaded, 25);
+      await runAiAnalysis(uploaded, 25, clientText, page1Img);
     } catch (err) {
       stopScanTimer();
       setScanProgress(0);
@@ -174,20 +260,25 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
     }
   };
 
-  const runAiAnalysis = async (fileInfo: UploadedFileInfo, startPct = 10) => {
+  const runAiAnalysis = async (
+    fileInfo: UploadedFileInfo,
+    startPct = 10,
+    browserText = '',
+    pageImageBase64 = ''
+  ) => {
     stopScanTimer();
     setAnalyzing(true);
     setAiError('');
     setScanProgress(startPct);
 
-    // Smoothly advance scan progress from startPct up to 95% while awaiting Gemini OCR response
+    // Progression fluide pendant la réponse Groq LPU
     scanTimerRef.current = window.setInterval(() => {
       setScanProgress((prev) => {
         if (prev >= 95) return 95;
-        const step = prev < 50 ? 2.6 : prev < 78 ? 1.5 : 0.6;
+        const step = prev < 50 ? 3.5 : prev < 78 ? 2.0 : 0.8;
         return Math.min(95, Number((prev + step).toFixed(1)));
       });
-    }, 140);
+    }, 120);
 
     try {
       const res = await apiFetch<{
@@ -201,6 +292,8 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
         body: JSON.stringify({
           storedFilename: fileInfo.storedFilename,
           mimeType: fileInfo.mimeType,
+          browserText: browserText || undefined,
+          pageImageBase64: pageImageBase64 || undefined,
         }),
       });
 
@@ -380,10 +473,9 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
                 </p>
               </div>
             ) : (previewMimeType || uploadedFile?.mimeType) === 'application/pdf' ? (
-              <iframe
-                src={previewUrl}
-                title="Document PDF"
-                className="w-full h-[640px] rounded border border-slate-200 dark:border-slate-800 bg-white"
+              <div
+                ref={pdfContainerRef}
+                className="w-full flex flex-col items-center overflow-y-auto max-h-[640px] p-2 bg-slate-200/50 dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-800"
               />
             ) : (
               <img

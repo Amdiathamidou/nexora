@@ -23,7 +23,12 @@ export const mailRoutes = Router();
 // ---------------------------------------------------------------------------
 mailRoutes.post('/ai/analyze', requireAuth, requireCompanyScope, async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
-  const { storedFilename, mimeType } = req.body as { storedFilename?: string; mimeType?: string };
+  const { storedFilename, mimeType, browserText, pageImageBase64 } = req.body as {
+    storedFilename?: string;
+    mimeType?: string;
+    browserText?: string;
+    pageImageBase64?: string;
+  };
 
   if (!storedFilename || !mimeType) {
     return res.status(400).json({ error: 'Paramètres manquants : storedFilename et mimeType sont requis.' });
@@ -31,7 +36,7 @@ mailRoutes.post('/ai/analyze', requireAuth, requireCompanyScope, async (req: Aut
 
   const filePath = path.join(UPLOADS_DIR, user.companyId!, storedFilename);
 
-  // Récupérer la liste des services de l'entreprise pour le prompt Gemini
+  // Récupérer la liste des services de l'entreprise pour le prompt IA
   const services = db.prepare('SELECT id, name FROM services WHERE company_id = ?').all(user.companyId) as Array<{ id: string; name: string }>;
   const companyNameRow = db.prepare('SELECT trade_name FROM companies WHERE id = ?').get(user.companyId) as { trade_name: string } | undefined;
   const companyName = companyNameRow?.trade_name || '';
@@ -42,6 +47,8 @@ mailRoutes.post('/ai/analyze', requireAuth, requireCompanyScope, async (req: Aut
       mimeType,
       companyServices: services,
       companyName,
+      browserText,
+      pageImageBase64,
     });
 
     // Créer un ID d'analyse et persister le résultat
