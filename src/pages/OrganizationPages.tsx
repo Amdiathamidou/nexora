@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Building2, Check, Key, Shield, ShieldCheck, UserPlus, X, Settings2 } from 'lucide-react';
+import { Building2, Check, Key, Shield, ShieldCheck, UserPlus, X, Settings2, Trash2 } from 'lucide-react';
 import { apiFetch } from '../api/client.ts';
 import type { ServiceItem, UserPermissions, UserRole } from '../types/nexora.ts';
 
@@ -673,6 +673,7 @@ export function ServicesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', managerUserId: '', isSecretariat: false, receptionRules: '' });
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState('');
 
   const loadData = useCallback(async () => {
     const [sRes, uRes] = await Promise.all([
@@ -682,6 +683,21 @@ export function ServicesPage() {
     setServices(sRes.services);
     setUsers(uRes.users);
   }, []);
+
+  const handleDeleteService = async (serviceId: string, serviceName: string) => {
+    if (!window.confirm(`Voulez-vous vraiment supprimer le service "${serviceName}" ?`)) {
+      return;
+    }
+    setError('');
+    setFeedback('');
+    try {
+      await apiFetch(`/api/services/${serviceId}`, { method: 'DELETE' });
+      setFeedback(`Le service "${serviceName}" a été supprimé avec succès.`);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression.');
+    }
+  };
 
   useEffect(() => {
     loadData().catch(() => {});
@@ -771,9 +787,19 @@ export function ServicesPage() {
           <div key={s.id} className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">{s.name}</h3>
-              {s.is_secretariat === 1 && (
-                <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-400">Secrétariat</span>
-              )}
+              <div className="flex items-center gap-2">
+                {s.is_secretariat === 1 && (
+                  <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-400">Secrétariat</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteService(s.id, s.name)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                  title="Supprimer ce service"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <p className="text-xs text-slate-500">{s.description}</p>
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-xs space-y-1">

@@ -770,6 +770,45 @@ adminRoutes.patch('/services/:id', requireAuth, requireCompanyScope, requireRole
   res.json({ ok: true });
 });
 
+adminRoutes.delete('/services/:id', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  const companyId = req.user!.companyId!;
+  const id = String(req.params.id);
+
+  const service = db.prepare('SELECT id, name FROM services WHERE id = ? AND company_id = ?').get(id, companyId) as { id: string; name: string } | undefined;
+  if (!service) {
+    res.status(404).json({ error: 'Service introuvable.' });
+    return;
+  }
+
+  // Empêcher la suppression du dernier service pour ne pas casser l'acheminement des courriers
+  const totalCount = (db.prepare('SELECT COUNT(*) as c FROM services WHERE company_id = ?').get(companyId) as { c: number }).c;
+  if (totalCount <= 1) {
+    res.status(400).json({ error: 'Impossible de supprimer l’unique service de l’organisation. Vous devez disposer d’au moins un service actif.' });
+    return;
+  }
+
+  db.transaction(() => {
+    // 1. Désaffecter les utilisateurs liés à ce service
+    db.prepare('DELETE FROM user_services WHERE service_id = ? AND company_id = ?').run(id, companyId);
+    // 2. Dissocier les courriers affectés à ce service
+    db.prepare('UPDATE mails SET current_service_id = NULL WHERE current_service_id = ? AND company_id = ?').run(id, companyId);
+    // 3. Supprimer le service
+    db.prepare('DELETE FROM services WHERE id = ? AND company_id = ?').run(id, companyId);
+  })();
+
+  logAudit({
+    companyId,
+    userId: req.user!.id,
+    userName: req.user!.fullName,
+    action: 'SUPPRESSION_SERVICE',
+    entityType: 'SERVICE',
+    entityId: id,
+    oldValue: { name: service.name },
+  });
+
+  res.json({ ok: true, message: `Le service "${service.name}" a été supprimé.` });
+});
+
 // ==================== CIRCUITS & VERSIONING ====================
 
 adminRoutes.get('/circuits', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {

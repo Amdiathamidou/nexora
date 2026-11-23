@@ -320,10 +320,12 @@ export function ProfilePage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">
-            Mon profil, Signature numérique &amp; Cachet officiel
+            {profile.role === 'PRESIDENT' ? 'Mon profil, Signature numérique & Cachet officiel' : 'Mon profil personnel'}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Modifiez vos informations personnelles, votre mot de passe et configurez votre signature numérique et cachet pour la validation des courriers.
+            {profile.role === 'PRESIDENT'
+              ? 'Modifiez vos informations personnelles, votre mot de passe et configurez votre signature numérique et cachet pour la validation des courriers.'
+              : 'Modifiez vos informations personnelles, coordonnées et mot de passe de connexion.'}
           </p>
         </div>
         <div className="text-xs font-mono text-slate-500">
@@ -346,7 +348,7 @@ export function ProfilePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Personal Info & Password */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className={profile.role === 'PRESIDENT' ? 'lg:col-span-5 space-y-6' : 'lg:col-span-8 max-w-2xl space-y-6'}>
           <form
             onSubmit={handleSaveIdentity}
             className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5"
@@ -489,8 +491,9 @@ export function ProfilePage() {
           </form>
         </div>
 
-        {/* Right: Digital Signature & Official Stamp */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* Right: Digital Signature & Official Stamp (RÉSERVÉ EXCLUSIVEMENT AU PRÉSIDENT) */}
+        {profile.role === 'PRESIDENT' && (
+          <div className="lg:col-span-7 space-y-6">
           <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-6">
             <div>
               <h2 className="font-display text-base font-bold flex items-center gap-2">
@@ -675,6 +678,7 @@ export function ProfilePage() {
             </div>
           </section>
         </div>
+        )}
       </div>
     </div>
   );
