@@ -25,6 +25,9 @@ function getSmtpTransporter() {
     port,
     secure: port === 465,
     auth: user && pass ? { user, pass } : undefined,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 }
 
@@ -51,6 +54,14 @@ export async function dispatchEmail(params: SendEmailParams): Promise<{ id: stri
     }
   }
 
+  // Résolution d'un company_id valide pour respecter les contraintes de clés étrangères
+  let effectiveCompanyId = params.companyId;
+  const existingCompany = db.prepare('SELECT id FROM companies WHERE id = ?').get(effectiveCompanyId);
+  if (!existingCompany) {
+    const defaultCompany = db.prepare('SELECT id FROM companies LIMIT 1').get() as { id: string } | undefined;
+    effectiveCompanyId = defaultCompany?.id || 'cmp_demo_group';
+  }
+
   db.prepare(`
     INSERT INTO email_logs (
       id, company_id, mail_id, recipient_user_id, recipient_email, recipient_name,
@@ -58,7 +69,7 @@ export async function dispatchEmail(params: SendEmailParams): Promise<{ id: stri
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     logId,
-    params.companyId,
+    effectiveCompanyId,
     params.mailId ?? null,
     params.recipientUserId ?? null,
     params.recipientEmail,
