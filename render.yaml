@@ -19,7 +19,7 @@ services:
         value: 587
       - key: MAIL_FROM_NAME
         value: Nexora
-      - key: KKIAPAY_SANDBOX
+      - key: FEDAPAY_SANDBOX
         value: "true"
       - key: GEMINI_API_KEY
         sync: false
@@ -31,11 +31,9 @@ services:
         sync: false
       - key: MAIL_FROM_ADDRESS
         sync: false
-      - key: KKIAPAY_PUBLIC_KEY
+      - key: FEDAPAY_PUBLIC_KEY
         sync: false
-      - key: KKIAPAY_PRIVATE_KEY
-        sync: false
-      - key: KKIAPAY_SECRET_KEY
+      - key: FEDAPAY_SECRET_KEY
         sync: false
       - key: GROQ_API_KEY
         sync: false

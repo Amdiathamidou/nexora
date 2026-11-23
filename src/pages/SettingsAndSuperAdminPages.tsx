@@ -55,23 +55,23 @@ function detectCardBrand(num: string): string {
   return 'Carte Bancaire';
 }
 
-function loadKkiapaySdk(): Promise<void> {
+function loadFedaPaySdk(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('Navigateur requis'));
-  const w = window as unknown as { openKkiapayWidget?: unknown };
-  if (typeof w.openKkiapayWidget === 'function') return Promise.resolve();
+  const w = window as unknown as { FedaPay?: unknown };
+  if (w.FedaPay) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-kkiapay-sdk="true"]');
+    const existing = document.querySelector<HTMLScriptElement>('script[data-fedapay-sdk="true"]');
     if (existing) {
       existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Impossible de charger le guichet Kkiapay.')), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Impossible de charger le guichet FedaPay.')), { once: true });
       return;
     }
     const script = document.createElement('script');
-    script.src = 'https://cdn.kkiapay.me/k.js';
+    script.src = 'https://cdn.fedapay.com/checkout.js?v=1.1.7';
     script.async = true;
-    script.dataset.kkiapaySdk = 'true';
+    script.dataset.fedapaySdk = 'true';
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Impossible de charger le guichet Kkiapay.'));
+    script.onerror = () => reject(new Error('Impossible de charger le guichet FedaPay.'));
     document.head.appendChild(script);
   });
 }
@@ -124,8 +124,10 @@ export function SettingsAndBillingPage() {
     provider: string;
     mode: string;
     payerMask: string;
-    kkiapayPublicKey?: string;
-    kkiapaySandbox?: boolean;
+    fedapayPublicKey?: string;
+    fedapaySandbox?: boolean;
+    fedaToken?: string;
+    checkoutUrl?: string;
   } | null>(null);
   const [otpCode, setOtpCode] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -220,8 +222,10 @@ export function SettingsAndBillingPage() {
         provider: string;
         mode: string;
         payerMask: string;
-        kkiapayPublicKey?: string;
-        kkiapaySandbox?: boolean;
+        fedapayPublicKey?: string;
+        fedapaySandbox?: boolean;
+        fedaToken?: string;
+        checkoutUrl?: string;
       }>('/api/subscription/checkout', {
         method: 'POST',
         body: JSON.stringify({
@@ -283,41 +287,62 @@ export function SettingsAndBillingPage() {
     await confirmPaymentWithCode(pendingTx.transactionId, otpCode);
   };
 
-  const handleOpenKkiapayWidget = async () => {
+  const handleOpenFedaPayWidget = async () => {
     const activeTx = pendingTxRef.current;
-    if (!activeTx || !activeTx.kkiapayPublicKey || !company) return;
+    if (!activeTx || !company) return;
     setError('');
+
+    // Si une URL de checkout directe existe (générée par l'API FedaPay)
+    if (activeTx.checkoutUrl) {
+      window.open(activeTx.checkoutUrl, '_blank');
+      return;
+    }
+
     try {
-      await loadKkiapaySdk();
+      await loadFedaPaySdk();
       const w = window as unknown as {
-        openKkiapayWidget?: (opts: Record<string, unknown>) => void;
-        addSuccessListener?: (cb: (res: { transactionId: string }) => void) => void;
+        FedaPay?: {
+          init: (
+            selector: string | HTMLElement,
+            options: {
+              public_key: string;
+              transaction: { id?: string | number; amount: number; description: string };
+              customer?: { email: string; lastname: string; firstname: string; phone_number?: { number: string; country: string } };
+              environment?: 'sandbox' | 'live';
+              onComplete?: (resp: { status: string; transaction: { id: number } }) => void;
+            }
+          ) => { open: () => void };
+        };
       };
-      if (!kkiapayListenerAttachedRef.current && typeof w.addSuccessListener === 'function') {
-        kkiapayListenerAttachedRef.current = true;
-        w.addSuccessListener((response) => {
-          const latestTx = pendingTxRef.current;
-          if (response?.transactionId && latestTx) {
-            setOtpCode(response.transactionId);
-            void confirmPaymentWithCode(latestTx.transactionId, response.transactionId);
-          }
+
+      if (w.FedaPay?.init) {
+        const names = (company.legal_name || 'Client Nexora').trim().split(' ');
+        const widget = w.FedaPay.init('body', {
+          public_key: activeTx.fedapayPublicKey || 'pk_sandbox_default',
+          environment: activeTx.fedapaySandbox ? 'sandbox' : 'live',
+          transaction: {
+            amount: activeTx.amountFcfa,
+            description: `Abonnement Nexora ${activeTx.externalTxRef}`,
+          },
+          customer: {
+            email: company.email,
+            lastname: names.slice(1).join(' ') || 'Client',
+            firstname: names[0] || 'Nexora',
+            phone_number: { number: momoPhone.replace(/\s+/g, ''), country: countryCode.toLowerCase() },
+          },
+          onComplete: (resp) => {
+            if (resp && resp.transaction?.id) {
+              setOtpCode(String(resp.transaction.id));
+              void confirmPaymentWithCode(activeTx.transactionId, String(resp.transaction.id));
+            }
+          },
         });
-      }
-      if (typeof w.openKkiapayWidget === 'function') {
-        w.openKkiapayWidget({
-          amount: activeTx.amountFcfa,
-          position: 'center',
-          key: activeTx.kkiapayPublicKey,
-          sandbox: Boolean(activeTx.kkiapaySandbox),
-          phone: paymentMethod !== 'CARD' ? momoPhone.replace(/\s+/g, '') : undefined,
-          email: company.email,
-          name: company.legal_name,
-        });
+        widget.open();
       } else {
-        throw new Error('Widget Kkiapay indisponible.');
+        throw new Error('Module FedaPay Checkout indisponible.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur d’ouverture du guichet Kkiapay');
+      setError(err instanceof Error ? err.message : 'Erreur d’ouverture du guichet FedaPay');
     }
   };
 
@@ -680,9 +705,9 @@ export function SettingsAndBillingPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="text-[11px] text-slate-500">
-              {gateway.provider === 'KKIAPAY'
-                ? 'Passerelle Kkiapay active : règlement sécurisé par Carte Bancaire (Visa, Mastercard, GIM-UEMOA) et Mobile Money (MTN MoMo, Moov, Wave, Orange, Celtiis).'
-                : 'Mode Sandbox UEMOA actif : aucune clé Kkiapay configurée dans .env (KKIAPAY_PUBLIC_KEY / KKIAPAY_PRIVATE_KEY), validation OTP simulée sans débit réel.'}
+              {gateway.provider === 'FEDAPAY'
+                ? 'Passerelle FedaPay active : règlement direct et sécurisé par Carte Bancaire (Visa, Mastercard) et Mobile Money (MTN MoMo, Moov, Wave, Celtiis, Orange).'
+                : 'Mode Sandbox UEMOA actif : aucune clé FedaPay configurée dans .env (FEDAPAY_PUBLIC_KEY / FEDAPAY_SECRET_KEY), validation OTP simulée sans débit réel.'}
             </p>
             <button
               type="submit"
@@ -696,7 +721,7 @@ export function SettingsAndBillingPage() {
           </div>
         </form>
 
-        {/* Pending Kkiapay / Sandbox Verification Box */}
+        {/* Pending FedaPay / Sandbox Verification Box */}
         {pendingTx && (
           <form
             onSubmit={handleConfirmPayment}
@@ -714,28 +739,38 @@ export function SettingsAndBillingPage() {
               </div>
             </div>
 
-            {pendingTx.provider === 'KKIAPAY' && pendingTx.kkiapayPublicKey ? (
+            {pendingTx.provider === 'FEDAPAY' ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={handleOpenKkiapayWidget}
-                    className="px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                    onClick={handleOpenFedaPayWidget}
+                    className="px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold hover:bg-slate-800"
                   >
-                    Ouvrir le guichet Kkiapay (Carte &amp; Mobile Money)
+                    Ouvrir le guichet FedaPay (Carte &amp; Mobile Money)
                   </button>
+                  {pendingTx.checkoutUrl && (
+                    <a
+                      href={pendingTx.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:underline"
+                    >
+                      Lien direct FedaPay &rarr;
+                    </a>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-end gap-3 pt-1">
                   <div className="flex-1 min-w-[220px]">
                     <label className="block text-xs font-semibold mb-1">
-                      ID de transaction Kkiapay ou code OTP Sandbox (ex: 123456)
+                      ID de transaction FedaPay ou code de test Sandbox (ex: 123456)
                     </label>
                     <input
                       type="text"
                       required
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="Ex: kkp_tx_... ou 123456"
+                      placeholder="Ex: 123456"
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono"
                     />
                   </div>
@@ -744,7 +779,7 @@ export function SettingsAndBillingPage() {
                     disabled={confirming}
                     className="px-5 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 disabled:opacity-60"
                   >
-                    {confirming ? 'Vérification Kkiapay...' : 'Vérifier & Activer l’abonnement'}
+                    {confirming ? 'Vérification FedaPay...' : 'Vérifier & Activer l’abonnement'}
                   </button>
                 </div>
               </div>
