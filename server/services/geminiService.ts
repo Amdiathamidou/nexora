@@ -1,4 +1,3 @@
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -35,63 +34,59 @@ export interface AiExtractionPayload {
   readabilityWarning: string;
 }
 
-function getAiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    return null;
+/**
+ * Nettoie le texte avant envoi à l'IA (normalisation UTF-8, caractères de contrôle, espaces)
+ * Identique à TextHelper::repair de XAMPP
+ */
+function sanitizeTextForAI(text: string, maxChars = 4500): string {
+  if (!text) return '';
+  let cleaned = text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, '')
+    .replace(/page\s+\d+(\s*\/\s*\d+)?/gi, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+  if (cleaned.length > maxChars) {
+    cleaned = cleaned.slice(0, maxChars) + '...';
   }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      apiVersion: 'v1beta',
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+  return cleaned;
 }
 
 /**
- * Extraction de texte brut du fichier via PDFParse (PDF décompressé), Tesseract OCR ou extraction de chaînes
+ * Extraction du texte brut via PDFParse (PDF) ou Tesseract OCR (Images / Windows)
+ * Exactement comme OcrService.php de XAMPP
  */
 async function extractRawTextFromFile(filePath: string): Promise<string> {
-  // 1. Décompression et extraction intégrale des pages PDF via PDFParse
-  if (filePath.toLowerCase().endsWith('.pdf')) {
+  const ext = path.extname(filePath).toLowerCase();
+
+  // 1. PDF via PDFParse
+  if (ext === '.pdf') {
     try {
       const buf = fs.readFileSync(filePath);
       const parser = new PDFParse(new Uint8Array(buf));
       const pdfData = await parser.getText();
-      if (pdfData && pdfData.text) {
-        // Nettoyer les marqueurs de page techniques tels que "-- 1 of 3 --", "Page 1", etc.
-        const cleaned = pdfData.text
-          .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, '')
-          .replace(/page\s+\d+(\s*\/\s*\d+)?/gi, '')
-          .trim();
-        // Vérifier la présence de vrais mots (au moins 8 mots signifiants)
-        const words = cleaned.match(/[a-zA-ZÀ-ÿ0-9]{3,}/g) || [];
-        if (words.length >= 8) {
-          return cleaned;
-        }
+      if (pdfData && pdfData.text && pdfData.text.trim().length > 15) {
+        return sanitizeTextForAI(pdfData.text);
       }
     } catch (pdfErr) {
       console.warn('[extractRawTextFromFile] PDFParse warning :', pdfErr);
     }
   }
 
-  // 2. Tesseract OCR si disponible (Windows pour images)
+  // 2. Images via Tesseract OCR (Windows C:\Program Files\Tesseract-OCR\tesseract.exe)
   const tesseractPath = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
-  if (fs.existsSync(tesseractPath) && !filePath.toLowerCase().endsWith('.pdf')) {
+  if (fs.existsSync(tesseractPath) && ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'].includes(ext)) {
     try {
-      const { stdout } = await execFileAsync(tesseractPath, [filePath, 'stdout', '-l', 'fra+eng'], { timeout: 12000 });
-      if (stdout && stdout.trim().length > 20) {
-        return stdout.trim();
+      const { stdout } = await execFileAsync(tesseractPath, [filePath, 'stdout', '-l', 'eng'], { timeout: 15000 });
+      if (stdout && stdout.trim().length > 10) {
+        return sanitizeTextForAI(stdout);
       }
-    } catch {
-      // Ignorer si échec OCR
+    } catch (ocrErr) {
+      console.warn('[extractRawTextFromFile] Tesseract warning :', ocrErr);
     }
   }
 
-  // 3. Extraction brute des chaînes de texte lisibles contenues dans le binaire (pour PDF textuels)
+  // 3. Fallback extraction des chaînes lisibles dans les fichiers
   try {
     const buf = fs.readFileSync(filePath);
     const str = buf.toString('latin1');
@@ -102,7 +97,7 @@ async function extractRawTextFromFile(filePath: string): Promise<string> {
         .join(' ');
       const words = candidates.match(/[a-zA-ZÀ-ÿ0-9]{3,}/g) || [];
       if (words.length >= 10) {
-        return candidates.slice(0, 3000);
+        return sanitizeTextForAI(candidates, 3000);
       }
     }
   } catch {
@@ -113,110 +108,133 @@ async function extractRawTextFromFile(filePath: string): Promise<string> {
 }
 
 /**
- * Moteur d'extraction IA Groq Qwen (exactement comme dans C:\xampp\htdocs\nexora\app\Services\AiService.php)
- * Utilise le modèle ultra-rapide qwen/qwen3.8-27b
+ * Moteur d'extraction IA Groq LPU — Exactement identique à XAMPP (AiService.php)
+ * Utilise la clé GROQ_API_KEY et le modèle qwen/qwen3.8-27b
  */
-async function analyzeWithGroqXampp(args: {
+async function analyzeWithGroqEngine(args: {
   rawText: string;
   serviceNames: string;
   companyName: string;
   filename: string;
 }): Promise<Partial<AiExtractionPayload> | null> {
-  const groqApiKey = process.env.GROQ_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
-  if (!groqApiKey) return null;
+  const groqApiKey = (process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
 
-  // Si aucun texte exploitable n'a été extrait, ne pas solliciter Groq avec une invite vide
-  if (!args.rawText || args.rawText.trim().length < 25) {
+  if (!groqApiKey) {
+    console.warn('[GroqEngine] Aucune clé GROQ_API_KEY ou OPENAI_API_KEY configurée.');
     return null;
   }
 
-  const contentToAnalyze = args.rawText.slice(0, 4500);
+  const contentToAnalyze = args.rawText ? args.rawText.slice(0, 4500) : `Document : ${args.filename}`;
 
-  const prompt = `Tu es un expert en gestion électronique de documents (GED) pour l'organisation "${args.companyName}".
-Analyse le document suivant et extrais les métadonnées administratives sous forme de JSON strict.
-Services disponibles dans l'organisation : [${args.serviceNames || 'Secrétariat, Direction Générale, Finances, Juridique'}].
+  const prompt = `Tu es un expert en gestion électronique de documents (GED) et archivage administratif pour l'organisation "${args.companyName}".
+Analyse le document ci-dessous et extrais TOUTES les informations structurées au format JSON.
+Services disponibles dans l'organisation : [${args.serviceNames || 'Secrétariat, Direction Générale, Affaires Juridiques, Finances, Ressources Humaines'}].
 Priorités valides : BASSE, NORMALE, HAUTE, URGENTE.
 
-Schéma JSON obligatoire (réponds UNIQUEMENT en JSON valide, sans balises ni texte superflu) :
+Schéma JSON obligatoire (réponds UNIQUEMENT avec le JSON complété, aucun texte avant ou après) :
 {
-  "ocrText": "Texte extrait ou résumé",
-  "subject": "Objet précis du courrier",
-  "senderName": "Nom de la personne expéditrice ou Non détecté",
-  "senderOrg": "Société, organisme ou institution expéditrice",
-  "recipientName": "Destinataire ou Secrétariat",
-  "recipientOrg": "${args.companyName}",
-  "mailDate": "YYYY-MM-DD",
-  "externalRef": "Référence du courrier ou Non détecté",
-  "mailNature": "Correspondance administrative",
-  "category": "Administration générale",
-  "deadlineMentioned": "YYYY-MM-DD (ou Non détecté)",
-  "requestedAction": "Action demandée ou enregistrement",
-  "shortSummary": "Résumé concis de 2 à 4 phrases",
-  "detailedSummary": "Synthèse détaillée du contenu et des points clés",
-  "suggestedPriority": "NORMALE",
-  "suggestedServiceName": "Nom du service le plus approprié",
-  "requiresResponse": true
+  "objet": "Sujet ou objet concis du courrier (extrait ou déduit)",
+  "expediteur_nom": "Nom de la personne physique expéditrice ou signataire",
+  "expediteur_organisation": "Entreprise, Ministère, Fédération ou organisme expéditeur",
+  "expediteur_adresse": "Adresse, ville ou pays de l'expéditeur (ex: Cotonou, Bénin)",
+  "destinataire_nom": "Nom ou fonction du destinataire (ex: Secrétaire Général)",
+  "destinataire_organisation": "${args.companyName || 'Organisation Destinataire'}",
+  "date_courrier": "YYYY-MM-DD (date figurant sur le courrier)",
+  "date_echeance": "YYYY-MM-DD (date d'échéance ou date limite mentionnée, ou à défaut J+14)",
+  "numero_depart": "Numéro de référence ou d'enregistrement du courrier (ex: N°_076_/2026/...)",
+  "nature_document": "Lettre administrative / Demande / Note de service / Facture / Circulaire",
+  "categorie_slug": "administratif / juridique / finance / rh / technique",
+  "service_destinataire_nom": "Nom du service approprié parmi la liste",
+  "priorite": "NORMALE / BASSE / HAUTE / URGENTE",
+  "resume": "Bref résumé clair du contenu (2 à 3 phrases)",
+  "instructions": "Instructions internes suggérées pour le traitement du courrier",
+  "mots_cles": ["mot1", "mot2", "mot3"]
 }
 
-DOCUMENT :
+DOCUMENT DU COURRIER :
 ${contentToAnalyze}`;
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+  // Essai avec qwen/qwen3.8-27b puis fallback openai/gpt-oss-120b sur Groq
+  const models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
 
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'qwen/qwen3.8-27b',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 800,
-      }),
-    });
-    clearTimeout(timeoutId);
+  for (const model of models) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    if (res.ok) {
-      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      let raw = data.choices?.[0]?.message?.content || '';
-      // Nettoyage Markdown et balises think
-      raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '');
-      raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      const firstB = raw.indexOf('{');
-      const lastB = raw.lastIndexOf('}');
-      if (firstB !== -1 && lastB > firstB) {
-        raw = raw.substring(firstB, lastB + 1);
-      }
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        if (!parsed.ocrText && args.rawText) {
-          parsed.ocrText = args.rawText.slice(0, 2000);
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 1000,
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        let raw = data.choices?.[0]?.message?.content || '';
+        raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+        const firstB = raw.indexOf('{');
+        const lastB = raw.lastIndexOf('}');
+        if (firstB !== -1 && lastB > firstB) {
+          raw = raw.substring(firstB, lastB + 1);
         }
-        return parsed;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          // Normalisation vers AiExtractionPayload
+          const today = new Date().toISOString().slice(0, 10);
+          return {
+            ocrText: args.rawText || `Document numérisé : ${args.filename}`,
+            subject: parsed.objet || parsed.subject || 'Correspondance administrative',
+            senderName: parsed.expediteur_nom || parsed.senderName || 'Non détecté',
+            senderOrg: parsed.expediteur_organisation || parsed.senderOrg || 'Non détecté',
+            recipientName: parsed.destinataire_nom || parsed.recipientName || 'Secrétariat Général',
+            recipientOrg: parsed.destinataire_organisation || parsed.recipientOrg || args.companyName || 'NEXORA',
+            mailDate: parsed.date_courrier || parsed.mailDate || today,
+            externalRef: parsed.numero_depart || parsed.externalRef || 'Non détecté',
+            mailNature: parsed.nature_document || parsed.mailNature || 'Correspondance administrative',
+            category: parsed.categorie_slug || parsed.category || 'Administration générale',
+            deadlineMentioned: parsed.date_echeance || parsed.deadlineMentioned || 'Non détecté',
+            requestedAction: parsed.instructions || parsed.requestedAction || 'Enregistrement et traitement',
+            shortSummary: parsed.resume || parsed.shortSummary || `Courrier ${args.filename} analysé avec succès.`,
+            detailedSummary: parsed.instructions
+              ? `${parsed.resume || ''}\n\nInstructions suggérées : ${parsed.instructions}`
+              : (parsed.detailedSummary || parsed.resume || ''),
+            suggestedPriority: (parsed.priorite || parsed.suggestedPriority || 'NORMALE').toUpperCase() as AiExtractionPayload['suggestedPriority'],
+            suggestedServiceName: parsed.service_destinataire_nom || parsed.suggestedServiceName || '',
+            requiresResponse: true,
+            uncertainFields: [],
+            readabilityWarning: '',
+          };
+        }
       }
+    } catch (e) {
+      console.warn(`[GroqEngine] Essai avec ${model} en échec, bascule...`, e);
     }
-  } catch (e) {
-    console.warn('[analyzeWithGroqXampp] Warning Groq :', e);
   }
+
   return null;
 }
 
 /**
  * Fallback Heuristique inspiré de XAMPP (AiService::analyzeHeuristic)
- * Analyse les expressions régulières dans le texte extrait ou le nom de fichier
- * Garantit qu'un document est TOUJOURS prérempli avec succès sans afficher d'erreur.
+ * Garantit qu'un courrier est TOUJOURS analysé sans jamais bloquer l'utilisateur.
  */
 function analyzeHeuristicFallback(
   filename: string,
   rawText: string,
   companyServices: Array<{ id: string; name: string }>,
   companyName: string
-): Partial<AiExtractionPayload> {
+): AiExtractionPayload {
   const baseName = path.basename(filename);
   const cleanName = baseName.replace(/[_-]/g, ' ').replace(/\.[^/.]+$/, '').trim();
   const today = new Date().toISOString().slice(0, 10);
@@ -231,17 +249,14 @@ function analyzeHeuristicFallback(
   let priority: 'BASSE' | 'NORMALE' | 'HAUTE' | 'URGENTE' = 'NORMALE';
 
   if (rawText && rawText.length > 10) {
-    // Objet
     const objMatch = rawText.match(/(?:objet|sujet|concernant)\s*[:\-]\s*(.+?)(?:\r?\n|$)/i);
     if (objMatch && objMatch[1]?.trim()) {
       subject = objMatch[1].trim();
     }
-    // Réf
     const refMatch = rawText.match(/(?:r[ée]f(?:[ée]rence)?|n[°o]|num[ée]ro)\s*[:\.]?\s*([A-Z0-9\-\/]{3,30})/i);
     if (refMatch && refMatch[1]?.trim()) {
       externalRef = refMatch[1].trim();
     }
-    // Date
     const dateMatch = rawText.match(/\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/);
     if (dateMatch && dateMatch[1]) {
       const parts = dateMatch[1].split(/[\/\-\.]/);
@@ -254,18 +269,19 @@ function analyzeHeuristicFallback(
         }
       }
     }
-    // Organisation
-    const orgMatch = rawText.match(/(?:minist[èe]re|direction|service|pr[ée]fecture|mairie|soci[ée]t[ée]|entreprise|banque|cabinet|agence)\s+(?:de\s+|d['’])?([A-ZÀ-ÿ][a-zà-ÿ0-9\s\-]+)/i);
+    const orgMatch = rawText.match(
+      /(?:minist[èe]re|direction|service|pr[ée]fecture|mairie|soci[ée]t[ée]|entreprise|banque|cabinet|agence|association|f[ée]d[ée]ration)\s+(?:de\s+|d['’])?([A-ZÀ-ÿ][a-zà-ÿ0-9\s\-]+)/i
+    );
     if (orgMatch && orgMatch[0]?.trim()) {
       senderOrg = orgMatch[0].trim();
     }
-    // Urgent
     if (/urgent|urgence|imm[ée]diat|tr[èe]s urgent/i.test(rawText)) {
       priority = 'URGENTE';
     }
   }
 
   return {
+    manualMode: false,
     ocrText: rawText || `Document numérisé : ${baseName}`,
     subject,
     senderName,
@@ -276,17 +292,27 @@ function analyzeHeuristicFallback(
     externalRef,
     mailNature: 'Correspondance administrative',
     category: 'Administration générale',
+    mentionedPersons: [],
+    concernedServices: [defaultSvc],
     deadlineMentioned: deadline,
     requestedAction: 'Enregistrement et transmission pour attribution',
+    attachmentsMentioned: [],
+    importantRefs: [],
     shortSummary: `Document ${baseName} enregistré et extrait avec succès le ${today}. Prêt pour orientation et traitement par les services.`,
-    detailedSummary: `Courrier numérisé et traité via le moteur d'extraction administrative Nexora. Informations préremplies automatiquement prêtes pour validation.`,
+    detailedSummary: `Courrier numérisé et traité via le moteur d'extraction administrative haute vitesse. Informations préremplies automatiquement prêtes pour validation.`,
     suggestedPriority: priority,
     suggestedServiceName: defaultSvc,
     requiresResponse: false,
+    uncertainFields: [],
     readabilityWarning: '',
   };
 }
 
+/**
+ * Point d'entrée principal pour l'analyse IA de courrier
+ * Utilise désormais l'architecture ultra-rapide de XAMPP (Groq Qwen 27B / LLaMA)
+ * sans aucune limite de quota et sans passer par Gemini.
+ */
 export async function analyzeMailDocumentWithGemini(args: {
   filePath: string;
   mimeType: string;
@@ -301,141 +327,56 @@ export async function analyzeMailDocumentWithGemini(args: {
   if (fileBytes.length === 0) {
     throw new Error('Le fichier importé est vide ou corrompu.');
   }
-  if (fileBytes.length > 50 * 1024 * 1024) {
-    throw new Error('Le document dépasse la taille maximale autorisée pour l\'analyse IA (50 Mo).');
-  }
-
-  const supportedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  if (!supportedMimes.includes(args.mimeType)) {
-    throw new Error(`Format non supporté pour l'OCR IA (${args.mimeType}). Formats acceptés : PDF, JPG, PNG.`);
-  }
 
   const serviceNames = args.companyServices.map((s) => s.name).join(', ');
   const filename = path.basename(args.filePath);
 
-  // ─── EXTRACTION DE TEXTE BRUT PRÉALABLE ───
+  // 1. Extraction du texte brut (PDFParse pour PDF, Tesseract OCR pour images)
   const rawText = await extractRawTextFromFile(args.filePath);
 
-  let parsed: Partial<AiExtractionPayload> | null = null;
+  // 2. Moteur IA Groq LPU (identique à XAMPP)
+  let result = await analyzeWithGroqEngine({
+    rawText,
+    serviceNames,
+    companyName: args.companyName,
+    filename,
+  });
 
-  // ─── 1. TENTATIVE VIA LE MOTEUR GROQ QWEN DE XAMPP (Priorité 1 si texte disponible) ───
-  if (rawText && rawText.length >= 25) {
-    try {
-      parsed = await analyzeWithGroqXampp({
-        rawText,
-        serviceNames,
-        companyName: args.companyName,
-        filename,
-      });
-      // Si Groq retourne une phrase d'indisponibilité ou document vide, basculer sur Gemini
-      if (
-        parsed &&
-        (parsed.shortSummary?.toLowerCase().includes('vide ou illisible') ||
-         parsed.ocrText?.toLowerCase().includes('vide ou illisible'))
-      ) {
-        parsed = null;
-      }
-    } catch (err) {
-      console.warn('[GeminiService] Groq failed, fallback to Gemini:', err);
-      parsed = null;
-    }
-  }
-
-  // ─── 2. SI DOCUMENT SCANNÉ / IMAGE OU GROQ NON UTILISÉ : GEMINI MULTIMODAL VISION ───
-  if (!parsed) {
-    const ai = getAiClient();
-    if (ai) {
-      const systemInstruction = [
-        `Tu es le moteur d'extraction OCR et d'analyse administrative de NEXORA pour l'organisation "${args.companyName}".`,
-        `RÈGLES DE SÉCURITÉ ET DE FIABILITÉ STRICTES :`,
-        `1. Effectue la reconnaissance OCR exhaustive de tout le texte visible (en-tête, expéditeur, destinataire, date, objet, corps, tampons, signataires).`,
-        `2. N'INVENTE JAMAIS une information absente du document. Si une information n'est pas lisible ou absente, retourne exactement "Non détecté".`,
-        `3. Suggère une catégorie, une priorité (BASSE, NORMALE, HAUTE, URGENTE), et le service le plus pertinent parmi : [${serviceNames || 'Secrétariat, Direction générale'}].`,
-      ].join('\n');
-
-      const promptText = `Effectue la reconnaissance OCR complète et l'extraction structurée de ce courrier administratif en français selon le schéma JSON strict demandé.`;
-
-      try {
-        let contentPart: any;
-        const normalizedMime = args.mimeType === 'image/jpg' ? 'image/jpeg' : args.mimeType;
-
-        // Si le fichier dépasse 15 Mo, utiliser l'API Files officielle de Gemini pour éviter les limites HTTP inline
-        if (fileBytes.length > 15 * 1024 * 1024) {
-          console.log(`[GeminiService] Fichier volumineux (${(fileBytes.length / (1024 * 1024)).toFixed(1)} Mo) : téléversement via Gemini Files API...`);
-          const uploadRes = await ai.files.upload({
-            file: args.filePath,
-            mimeType: normalizedMime,
-          });
-          contentPart = {
-            fileData: {
-              fileUri: uploadRes.uri,
-              mimeType: uploadRes.mimeType || normalizedMime,
-            },
-          };
-        } else {
-          contentPart = {
-            inlineData: {
-              mimeType: normalizedMime,
-              data: fileBytes.toString('base64'),
-            },
-          };
-        }
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [contentPart, promptText],
-          config: {
-            systemInstruction,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-          },
-        });
-
-        const text = (response.text ?? '').trim();
-        if (text) {
-          parsed = JSON.parse(text);
-        }
-      } catch (err) {
-        console.warn('[GeminiService] Gemini indisponible ou erreur vision :', err);
-      }
-    }
-  }
-
-  // ─── 3. SI LES DEUX IA ONT ÉCHOUÉ : FALLBACK HEURISTIQUE ROBUSTE DE XAMPP (ZÉRO ERREUR) ───
-  if (!parsed) {
-    parsed = analyzeHeuristicFallback(filename, rawText, args.companyServices, args.companyName);
+  // 3. Fallback Heuristique garanti (zéro crash, zéro blocage)
+  if (!result) {
+    result = analyzeHeuristicFallback(filename, rawText, args.companyServices, args.companyName);
   }
 
   const validPriorities = ['BASSE', 'NORMALE', 'HAUTE', 'URGENTE'];
-  const priority = validPriorities.includes(String(parsed.suggestedPriority).toUpperCase())
-    ? (String(parsed.suggestedPriority).toUpperCase() as AiExtractionPayload['suggestedPriority'])
+  const priority = validPriorities.includes(String(result.suggestedPriority).toUpperCase())
+    ? (String(result.suggestedPriority).toUpperCase() as AiExtractionPayload['suggestedPriority'])
     : 'NORMALE';
 
   return {
     manualMode: false,
-    ocrText: parsed.ocrText || rawText || `Document numérisé : ${filename}`,
-    senderName: parsed.senderName || 'Non détecté',
-    senderOrg: parsed.senderOrg || 'Non détecté',
-    recipientName: parsed.recipientName || 'Non détecté',
-    recipientOrg: parsed.recipientOrg || args.companyName || 'NEXORA',
-    mailDate: parsed.mailDate || new Date().toISOString().slice(0, 10),
-    externalRef: parsed.externalRef || 'Non détecté',
-    subject: parsed.subject || 'Correspondance administrative',
-    mailNature: parsed.mailNature || 'Correspondance administrative',
-    category: parsed.category || 'Administration générale',
-    mentionedPersons: Array.isArray(parsed.mentionedPersons) ? parsed.mentionedPersons : [],
-    concernedServices: Array.isArray(parsed.concernedServices) ? parsed.concernedServices : [],
-    deadlineMentioned: parsed.deadlineMentioned || 'Non détecté',
-    requestedAction: parsed.requestedAction || 'Enregistrement et traitement',
-    attachmentsMentioned: Array.isArray(parsed.attachmentsMentioned) ? parsed.attachmentsMentioned : [],
-    importantRefs: Array.isArray(parsed.importantRefs) ? parsed.importantRefs : [],
-    shortSummary: parsed.shortSummary || `Courrier ${filename} numérisé et analysé avec succès.`,
-    detailedSummary: parsed.detailedSummary || `Courrier administratif analysé et prérempli automatiquement par le moteur d'intelligence documentaire.`,
+    ocrText: result.ocrText || rawText || `Document numérisé : ${filename}`,
+    senderName: result.senderName || 'Non détecté',
+    senderOrg: result.senderOrg || 'Non détecté',
+    recipientName: result.recipientName || 'Non détecté',
+    recipientOrg: result.recipientOrg || args.companyName || 'NEXORA',
+    mailDate: result.mailDate || new Date().toISOString().slice(0, 10),
+    externalRef: result.externalRef || 'Non détecté',
+    subject: result.subject || 'Correspondance administrative',
+    mailNature: result.mailNature || 'Correspondance administrative',
+    category: result.category || 'Administration générale',
+    mentionedPersons: Array.isArray(result.mentionedPersons) ? result.mentionedPersons : [],
+    concernedServices: Array.isArray(result.concernedServices) ? result.concernedServices : [],
+    deadlineMentioned: result.deadlineMentioned || 'Non détecté',
+    requestedAction: result.requestedAction || 'Enregistrement et traitement',
+    attachmentsMentioned: Array.isArray(result.attachmentsMentioned) ? result.attachmentsMentioned : [],
+    importantRefs: Array.isArray(result.importantRefs) ? result.importantRefs : [],
+    shortSummary: result.shortSummary || `Courrier ${filename} numérisé et analysé avec succès.`,
+    detailedSummary: result.detailedSummary || `Courrier administratif analysé et prérempli automatiquement.`,
     suggestedPriority: priority,
-    suggestedServiceName: parsed.suggestedServiceName || (args.companyServices[0]?.name || 'Secrétariat'),
-    requiresResponse: Boolean(parsed.requiresResponse),
-    uncertainFields: Array.isArray(parsed.uncertainFields) ? parsed.uncertainFields : [],
-    readabilityWarning: parsed.readabilityWarning || '',
+    suggestedServiceName: result.suggestedServiceName || (args.companyServices[0]?.name || 'Secrétariat'),
+    requiresResponse: Boolean(result.requiresResponse),
+    uncertainFields: Array.isArray(result.uncertainFields) ? result.uncertainFields : [],
+    readabilityWarning: result.readabilityWarning || '',
   };
 }
 
@@ -465,48 +406,30 @@ export function findPotentialDuplicateMails(args: {
     mail_date: string;
   }>;
 
-  const matches: Array<{
-    id: string;
-    reference: string;
-    subject: string;
-    sender_name: string;
-    external_ref: string;
-    mail_date: string;
-    reason: string;
-  }> = [];
+  const duplicates: Array<{ id: string; reference: string; subject: string; sender_name: string; external_ref: string; mail_date: string; reason: string }> = [];
 
-  const extRef = (args.externalRef || '').trim().toLowerCase();
-  const subj = (args.subject || '').trim().toLowerCase();
-  const sender = (args.senderName || '').trim().toLowerCase();
+  for (const m of rows) {
+    if (args.excludeMailId && m.id === args.excludeMailId) continue;
 
-  for (const r of rows) {
-    if (args.excludeMailId && r.id === args.excludeMailId) continue;
-    const reasons: string[] = [];
-
-    if (extRef && extRef !== 'non détecté' && r.external_ref && r.external_ref.toLowerCase() === extRef) {
-      reasons.push('Référence externe identique');
-    }
-    if (subj && subj !== 'non détecté' && r.subject.toLowerCase() === subj) {
-      reasons.push('Objet identique');
-    } else if (subj && subj.length > 12 && r.subject.toLowerCase().includes(subj.slice(0, 18))) {
-      reasons.push('Objet très similaire');
-    }
-    if (sender && sender !== 'non détecté' && r.sender_name.toLowerCase() === sender && args.mailDate && r.mail_date === args.mailDate) {
-      reasons.push('Même expéditeur et même date');
+    if (args.externalRef && args.externalRef !== 'Non détecté' && m.external_ref && m.external_ref.trim() !== '') {
+      if (m.external_ref.toLowerCase() === args.externalRef.toLowerCase()) {
+        duplicates.push({ ...m, reason: `Même référence externe : "${args.externalRef}"` });
+        continue;
+      }
     }
 
-    if (reasons.length > 0) {
-      matches.push({
-        id: r.id,
-        reference: r.reference,
-        subject: r.subject,
-        sender_name: r.sender_name,
-        external_ref: r.external_ref,
-        mail_date: r.mail_date,
-        reason: reasons.join(' · '),
-      });
+    if (args.senderName && args.mailDate && m.sender_name && m.mail_date) {
+      if (
+        m.sender_name.toLowerCase() === args.senderName.toLowerCase() &&
+        m.mail_date === args.mailDate &&
+        args.subject &&
+        m.subject &&
+        m.subject.toLowerCase() === args.subject.toLowerCase()
+      ) {
+        duplicates.push({ ...m, reason: `Même expéditeur, même date (${args.mailDate}) et objet identique` });
+      }
     }
   }
 
-  return matches.slice(0, 5);
+  return duplicates;
 }

@@ -313,7 +313,7 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
             Enregistrement &amp; Analyse IA d’un courrier
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Déposez un PDF ou une image pour lancer l’OCR Gemini et préremplir le formulaire. Validation humaine requise avant enregistrement officiel.
+            Déposez un PDF ou une image pour lancer l’analyse IA et l'OCR haute vitesse et préremplir automatiquement le formulaire. Validation humaine requise avant enregistrement officiel.
           </p>
         </div>
 
@@ -432,7 +432,7 @@ export function MailCreateAIPage({ onNavigate }: MailCreateAIPageProps) {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-600" />
-                  <h2 className="font-display text-sm font-bold">Analyse IA Gemini (Assistance à la saisie)</h2>
+                  <h2 className="font-display text-sm font-bold">Analyse IA Haute Vitesse (Assistance à la saisie)</h2>
                 </div>
                 {uploadedFile && !analyzing && !uploading && (
                   <button

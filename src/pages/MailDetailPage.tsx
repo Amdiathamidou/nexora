@@ -1127,7 +1127,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-base font-bold">Résumé &amp; Extraction IA</h2>
                 <span className="text-xs font-mono text-slate-500">
-                  {aiAnalyses[0].is_simulated === 1 ? 'Analyse de démonstration simulée' : 'Analyse Gemini réelle'}
+                  {aiAnalyses[0].is_simulated === 1 ? 'Analyse de démonstration simulée' : 'Analyse IA certifiée'}
                 </span>
               </div>
               <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{aiAnalyses[0].short_summary}</p>
