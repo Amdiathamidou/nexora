@@ -28,6 +28,10 @@ app.use('/api', mailRoutes);
 app.use('/api', adminRoutes);
 
 app.use('/api', (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err && typeof err === 'object' && 'code' in err && err.code === 'LIMIT_FILE_SIZE') {
+    res.status(400).json({ error: 'Le fichier dépasse la limite autorisée (taille maximale : 50 Mo).' });
+    return;
+  }
   const message = err instanceof Error ? err.message : 'Erreur interne du serveur';
   res.status(500).json({ error: message });
 });

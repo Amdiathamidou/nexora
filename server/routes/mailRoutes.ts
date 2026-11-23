@@ -111,7 +111,7 @@ const uploadStorage = multer.diskStorage({
 
 const upload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 15 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 Mo pour accepter tous types de scans administratifs haute résolution
   fileFilter: (_req, file, cb) => {
     const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (allowed.includes(file.mimetype)) {

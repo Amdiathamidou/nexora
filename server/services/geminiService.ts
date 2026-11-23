@@ -287,8 +287,8 @@ export async function analyzeMailDocumentWithGemini(args: {
   if (fileBytes.length === 0) {
     throw new Error('Le fichier importé est vide ou corrompu.');
   }
-  if (fileBytes.length > 20 * 1024 * 1024) {
-    throw new Error('Le document dépasse la taille maximale autorisée pour l\'analyse IA (20 Mo).');
+  if (fileBytes.length > 50 * 1024 * 1024) {
+    throw new Error('Le document dépasse la taille maximale autorisée pour l\'analyse IA (50 Mo).');
   }
 
   const supportedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
