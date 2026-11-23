@@ -57,7 +57,7 @@ adminRoutes.get('/public/plans', (_req, res: Response) => {
   });
 });
 
-adminRoutes.post('/public/contact', (req, res: Response) => {
+adminRoutes.post('/public/contact', async (req, res: Response) => {
   const { companyName, contactName, email, phone, message } = req.body ?? {};
   if (!companyName || !contactName || !email || !message) {
     res.status(400).json({ error: 'Veuillez remplir tous les champs obligatoires.' });
@@ -68,6 +68,21 @@ adminRoutes.post('/public/contact', (req, res: Response) => {
     INSERT INTO contact_leads (id, company_name, contact_name, email, phone, message)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, String(companyName).trim(), String(contactName).trim(), String(email).trim(), String(phone || '').trim(), String(message).trim());
+
+  // Envoi automatique d'email vers amdiathamidou@gmail.com
+  try {
+    const { dispatchEmail } = await import('../services/emailService.ts');
+    await dispatchEmail({
+      companyId: 'system',
+      recipientEmail: 'amdiathamidou@gmail.com',
+      recipientName: 'Amdiath Hamidou',
+      subject: `[NEXORA Contact] Nouveau message de ${contactName} (${companyName})`,
+      bodyText: `Nouveau message reçu depuis le formulaire de contact du site NEXORA :\n\n- Organisation : ${companyName}\n- Contact : ${contactName}\n- Email : ${email}\n- Téléphone : ${phone || 'Non renseigné'}\n\nMessage :\n${message}\n\nDate : ${new Date().toLocaleString('fr-FR')}`,
+      triggerEvent: 'CONTACT_LEAD_SUBMITTED',
+    });
+  } catch (err) {
+    console.warn('[Contact] Erreur envoi email lead :', err);
+  }
 
   res.status(201).json({ id, message: 'Votre demande a bien été transmise à l’équipe NEXORA.' });
 });

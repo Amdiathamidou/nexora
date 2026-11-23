@@ -347,14 +347,16 @@ export function RoleDashboardPage({ mode, onNavigate }: RoleDashboardProps) {
                 Gérez les mandats accordés aux collaborateurs de confiance pour signer en votre nom durant vos absences ou déplacements.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Déléguer ma signature</span>
-            </button>
+            {(user.role as string) === 'PRESIDENT' && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Déléguer ma signature</span>
+              </button>
+            )}
           </div>
 
           <div className="text-xs p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300">
@@ -785,14 +787,16 @@ export function RoleDashboardPage({ mode, onNavigate }: RoleDashboardProps) {
                 Gérez les mandats accordés aux collaborateurs de confiance pour signer en votre nom durant vos absences ou déplacements.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Déléguer ma signature</span>
-            </button>
+            {(user.role as string) === 'PRESIDENT' && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Déléguer ma signature</span>
+              </button>
+            )}
           </div>
 
           <div className="text-xs p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300">
@@ -1176,14 +1180,16 @@ export function RoleDashboardPage({ mode, onNavigate }: RoleDashboardProps) {
                 Gérez les mandats accordés aux collaborateurs de confiance pour signer en votre nom durant vos absences ou déplacements.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Déléguer ma signature</span>
-            </button>
+            {(user.role as string) === 'PRESIDENT' && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Déléguer ma signature</span>
+              </button>
+            )}
           </div>
 
           <div className="text-xs p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300">
