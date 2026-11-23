@@ -85,6 +85,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
   const [entPays, setEntPays] = useState('Bénin');
   const [entAdminName, setEntAdminName] = useState('');
   const [entFonction, setEntFonction] = useState('Directeur Général');
+  const [entServiceName, setEntServiceName] = useState('Direction Générale');
   const [logoPreview, setLogoPreview] = useState<string>('');
 
   // Section Particulier
@@ -167,6 +168,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
     const compSecteur = isEnt ? entSecteur : (partProf || 'Indépendant');
     const compAdminName = isEnt ? (entAdminName || entName) : partName;
     const compFonction = isEnt ? (entFonction || 'Directeur Général') : (partProf || 'Indépendant');
+    const compServiceName = isEnt ? (entServiceName || compFonction || 'Direction') : (partProf || 'Activité Indépendante');
 
     if (!compLegalName) {
       setError(isEnt ? "Veuillez renseigner le nom de l'entreprise." : 'Veuillez renseigner votre nom complet.');
@@ -193,6 +195,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
         admin: {
           fullName: compAdminName,
           jobTitle: compFonction,
+          serviceName: compServiceName,
           email: regEmail,
           phone: compPhone,
           password: regPassword,
@@ -645,7 +648,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                         />
                       </div>
 
-                      <div className="sm:col-span-5">
+                      <div className="sm:col-span-4">
                         <label className="block text-xs font-bold text-slate-700 mb-1">Poste / Fonction</label>
                         <input
                           type="text"
@@ -654,6 +657,23 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           placeholder="ex: Directeur Général, Gérant..."
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
+                      </div>
+
+                      <div className="sm:col-span-8">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Nom de votre Service / Département <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={entServiceName}
+                          onChange={(e) => setEntServiceName(e.target.value)}
+                          placeholder="ex: Direction Générale, Secrétariat Exécutif, Cabinet..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Ce service sera créé pour votre organisation et vous y serez rattaché en tant que responsable.
+                        </p>
                       </div>
                     </div>
                   </div>

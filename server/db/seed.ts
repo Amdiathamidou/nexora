@@ -111,9 +111,9 @@ export function seedDefaultPlans(): void {
 export function createDefaultServicesAndCircuits(
   companyId: string,
   adminUserId: string,
-  adminJobTitle?: string
+  serviceNameInput?: string
 ): { secretariatServiceId: string } {
-  const serviceName = adminJobTitle && adminJobTitle.trim() ? adminJobTitle.trim() : 'Direction / Administration';
+  const serviceName = serviceNameInput && serviceNameInput.trim() ? serviceNameInput.trim() : 'Direction Générale';
   const secId = `svc_sec_${companyId}`;
 
   const insSvc = db.prepare(`
@@ -121,15 +121,15 @@ export function createDefaultServicesAndCircuits(
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Crée UNIQUEMENT le service / département initial de l'administrateur
+  // Crée UNIQUEMENT le service / département renseigné lors de l'inscription
   insSvc.run(
     secId,
     companyId,
     serviceName,
-    `Service initial rattaché au poste : ${serviceName}`,
+    `Service principal rattaché au responsable : ${serviceName}`,
     adminUserId,
     1,
-    'Point d’entrée principal pour la gestion et le traitement des courriers.'
+    'Point d’entrée principal pour la gestion, réception et traitement des courriers.'
   );
 
   db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(
@@ -150,7 +150,7 @@ export function createDefaultServicesAndCircuits(
   db.prepare(`
     INSERT INTO circuits (id, company_id, name, description, category, mail_direction, current_version, is_active)
     VALUES (?, ?, ?, ?, ?, 'ENTRANT', 1, 1)
-  `).run(cId, companyId, 'Circuit standard initial', 'Circuit rattaché au service initial de l’entreprise.', 'Administration générale');
+  `).run(cId, companyId, 'Circuit standard initial', `Circuit rattaché au service "${serviceName}".`, 'Administration générale');
   db.prepare(`
     INSERT INTO circuit_versions (id, circuit_id, company_id, version_number, steps_json)
     VALUES (?, ?, ?, 1, ?)
