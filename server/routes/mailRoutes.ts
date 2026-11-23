@@ -18,6 +18,81 @@ import { newId, safeParseJson } from '../utils/crypto.ts';
 
 export const mailRoutes = Router();
 
+// ---------------------------------------------------------------------------
+// AI Analyse du document (Gemini)
+// ---------------------------------------------------------------------------
+mailRoutes.post('/ai/analyze', requireAuth, requireCompanyScope, async (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { storedFilename, mimeType } = req.body as { storedFilename?: string; mimeType?: string };
+
+  if (!storedFilename || !mimeType) {
+    return res.status(400).json({ error: 'Paramètres manquants : storedFilename et mimeType sont requis.' });
+  }
+
+  const filePath = path.join(UPLOADS_DIR, user.companyId!, storedFilename);
+
+  // Récupérer la liste des services de l'entreprise pour le prompt Gemini
+  const services = db.prepare('SELECT id, name FROM services WHERE company_id = ?').all(user.companyId) as Array<{ id: string; name: string }>;
+  const companyNameRow = db.prepare('SELECT trade_name FROM companies WHERE id = ?').get(user.companyId) as { trade_name: string } | undefined;
+  const companyName = companyNameRow?.trade_name || '';
+
+  try {
+    const extraction = await analyzeMailDocumentWithGemini({
+      filePath,
+      mimeType,
+      companyServices: services,
+      companyName,
+    });
+
+    // Créer un ID d'analyse et persister le résultat
+    const analysisId = newId('analysis');
+    db.prepare(
+      `INSERT INTO ai_analyses (id, company_id, status, is_simulated, ocr_text, extracted_json, short_summary, detailed_summary, suggested_category, suggested_priority)
+       VALUES (?, ?, 'COMPLETED', 0, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      analysisId,
+      user.companyId,
+      extraction.ocrText,
+      JSON.stringify(extraction),
+      extraction.shortSummary,
+      extraction.detailedSummary,
+      extraction.category,
+      extraction.suggestedPriority
+    );
+
+    // Service suggéré (si le nom correspond à un service existé)
+    let suggestedServiceId = '';
+    if (extraction.suggestedServiceName) {
+      const svc = db.prepare('SELECT id FROM services WHERE company_id = ? AND name = ?').get(user.companyId, extraction.suggestedServiceName) as { id: string } | undefined;
+      if (svc) suggestedServiceId = svc.id;
+    }
+
+    // Circuit suggéré – on prend le premier circuit « ENTRANT » par défaut
+    const circ = db.prepare('SELECT id FROM circuits WHERE company_id = ? AND mail_direction = ? ORDER BY id LIMIT 1').get(user.companyId, 'ENTRANT') as { id: string } | undefined;
+    const suggestedCircuitId = circ?.id || '';
+
+    // Recherche de doublons potentiels
+    const duplicates = findPotentialDuplicateMails({
+      companyId: user.companyId,
+      externalRef: extraction.externalRef,
+      senderName: extraction.senderName,
+      mailDate: extraction.mailDate,
+      subject: extraction.subject,
+    });
+
+    return res.json({
+      analysisId,
+      extraction,
+      suggestedServiceId,
+      suggestedCircuitId,
+      duplicates,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
 const uploadStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
     const authReq = req as AuthenticatedRequest;
