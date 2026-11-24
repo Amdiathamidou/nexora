@@ -220,6 +220,9 @@ export function seedDemoEnvironment(): void {
         VALUES ('msig_demo_4', 'mail_demo_4', 'cmp_demo_group', 'usr_demo_president', 'Sébastien Houngbédji', 'PRESIDENT', 'Président Directeur Général', ?, ?, 'sha256:demo-arr-2026-0004-verified')
       `).run(demoSig, demoStamp);
     }
+
+    // Seed de l'organisation Exemple si elle n'existe pas encore (pour Render et nouveaux environnements)
+    seedExempleCompanyEnvironment();
     return;
   }
 
@@ -745,4 +748,122 @@ export function seedDemoEnvironment(): void {
     INSERT INTO mail_signatures (id, mail_id, company_id, signer_user_id, signer_name, signer_role, signer_title, signature_image, stamp_image, signature_hash)
     VALUES ('msig_demo_4', 'mail_demo_4', ?, 'usr_demo_president', 'Sébastien Houngbédji', 'PRESIDENT', 'Président Directeur Général', ?, ?, 'sha256:demo-arr-2026-0004-verified')
   `).run(companyId, demoSig, demoStamp);
+
+  // Initialisation de la société Exemple
+  seedExempleCompanyEnvironment();
+}
+
+/**
+ * Initialise l'organisation réelle « Exemple » avec son administrateur (master@koracourrier.africa),
+ * son Président, ses directions/services et ses circuits.
+ */
+export function seedExempleCompanyEnvironment(): void {
+  const companyId = 'cmp_ead03f02-742f-47eb-9b46-f3961a0f61a7';
+  const existingCompany = db.prepare('SELECT id FROM companies WHERE id = ?').get(companyId) as { id: string } | undefined;
+
+  const adminPassHash = '5ea5b99c25028af18ecfcf77325b1a0c:d05e50dad550dbfd89eabf977d3f7206189d9f7711ef9f1f9fd811971ef8b8c8e6a6e1f543386c47b906c11314e9d75c1b98b5d073aadea03ba7d6f6604a6d14';
+  const presPassHash = '897ae10fe60a76079cbecc277efd9e64:51783cecb8301e2ada3e9c8b3aca7c5acee8c8c306e65aa66ff365a574bdff9342afd62ec19f8f0f971688d52df47ee5e0729bddaf953e6112a86afb2ca8e694';
+
+  if (!existingCompany) {
+    db.prepare(`
+      INSERT INTO companies (
+        id, legal_name, trade_name, sector, legal_form, country, city, address, phone, email, website, tax_id,
+        ref_prefix_in, ref_prefix_out, ref_prefix_int, plan_id, status, trial_ends_at, is_demo, primary_color,
+        billing_cycle, subscription_expires_at, created_at
+      ) VALUES (
+        ?, 'Exemple', 'Exemple', 'Sport & Loisirs', 'SARL', 'Bénin', 'Cotonou', 'vedoko', '+229 0159659396',
+        'master@koracourrier.africa', '', '9999999999999', 'ARR', 'DEP', 'INT', 'plan_essentiel', 'active',
+        '2026-12-07', 0, '#2563EB', 'MONTHLY', '2026-12-24', '2026-11-23 23:14:32'
+      )
+    `).run(companyId);
+  }
+
+  // 1. Services & Directions
+  const servicesData = [
+    { id: 'svc_sec_' + companyId, name: 'Secrétariat', desc: 'Réception, numérisation IA, orientation, contrôle final et expédition.', isSec: 1, type: 'SERVICE', managerId: 'usr_45707827-8eba-41b1-8a53-6d02065e496a' },
+    { id: 'svc_dg_' + companyId, name: 'Direction générale', desc: 'Coordination opérationnelle et arbitrages de direction.', isSec: 0, type: 'SERVICE', managerId: null },
+    { id: 'svc_rh_' + companyId, name: 'Ressources humaines', desc: 'Gestion administrative du personnel et recrutements.', isSec: 0, type: 'SERVICE', managerId: null },
+    { id: 'svc_fin_' + companyId, name: 'Direction financière', desc: 'Facturation, engagements budgétaires et trésorerie.', isSec: 0, type: 'SERVICE', managerId: null },
+    { id: 'svc_cdfe18c0-9570-4ce8-b61d-0a2d7bfc6436', name: 'Présidence', desc: 'supérieure hiérachique', isSec: 0, type: 'SERVICE', managerId: null },
+  ];
+
+  for (const s of servicesData) {
+    const sExists = db.prepare('SELECT id FROM services WHERE id = ?').get(s.id);
+    if (!sExists) {
+      db.prepare(`
+        INSERT INTO services (id, company_id, name, description, manager_user_id, is_secretariat, type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, '2026-11-23 23:14:32')
+      `).run(s.id, companyId, s.name, s.desc, s.managerId, s.isSec, s.type);
+    }
+  }
+
+  // 2. Administrateur (master@koracourrier.africa)
+  const adminId = 'usr_45707827-8eba-41b1-8a53-6d02065e496a';
+  const adminUser = db.prepare('SELECT id FROM users WHERE id = ? OR LOWER(email) = LOWER(?)').get(adminId, 'master@koracourrier.africa') as { id: string } | undefined;
+  if (!adminUser) {
+    db.prepare(`
+      INSERT INTO users (
+        id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, is_activated,
+        permissions_json, permissions_audit_json, created_at
+      ) VALUES (
+        ?, ?, 'AMDIATH AMIDOU', 'Sécretaire Administratif', 'master@koracourrier.africa', '+229 0159659396',
+        ?, 'ADMIN', 1, 1,
+        '{"can_manage_users":true,"can_manage_circuits":true,"can_view_all_services":true,"can_view_confidential":true,"can_export_reports":true,"secretariat_receive":true,"secretariat_register":true,"secretariat_ai_analyze":true,"secretariat_orient":true,"secretariat_final_control":true,"secretariat_dispatch":true,"secretariat_archive":true}',
+        '{}', '2026-11-23 23:14:32'
+      )
+    `).run(adminId, companyId, adminPassHash);
+
+    db.prepare(`
+      INSERT OR IGNORE INTO user_services (user_id, service_id, company_id)
+      VALUES (?, ?, ?)
+    `).run(adminId, 'svc_sec_' + companyId, companyId);
+  }
+
+  // 3. Président (amdiathmohamed414@gmail.com)
+  const presId = 'usr_ab0eeb08-b436-42f3-b92b-ac41d2eca99d';
+  const presUser = db.prepare('SELECT id FROM users WHERE id = ? OR LOWER(email) = LOWER(?)').get(presId, 'amdiathmohamed414@gmail.com') as { id: string } | undefined;
+  if (!presUser) {
+    db.prepare(`
+      INSERT INTO users (
+        id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, is_activated,
+        service_id, permissions_json, permissions_audit_json, created_at
+      ) VALUES (
+        ?, ?, 'madi', 'Président Directeur général', 'amdiathmohamed414@gmail.com', '0159659396',
+        ?, 'PRESIDENT', 1, 1, 'svc_cdfe18c0-9570-4ce8-b61d-0a2d7bfc6436',
+        '{"can_view_all_services":true,"can_view_confidential":true,"can_export_reports":true,"can_manage_circuits":false,"can_manage_users":false}',
+        '{"suggestedPermissions":{"can_view_all_services":true,"can_view_confidential":true,"can_export_reports":true,"can_manage_circuits":false,"can_manage_users":false},"manualModifications":false,"validatedByUserId":"${adminId}","validatedByUserName":"AMDIATH AMIDOU","validatedAt":"2026-11-24T00:50:53.734Z"}',
+        '2026-11-24 00:50:53'
+      )
+    `).run(presId, companyId, presPassHash);
+
+    db.prepare(`
+      INSERT OR IGNORE INTO user_services (user_id, service_id, company_id)
+      VALUES (?, 'svc_cdfe18c0-9570-4ce8-b61d-0a2d7bfc6436', ?)
+    `).run(presId, companyId);
+  }
+
+  // 4. Circuit standard
+  const circuitId = 'cir_std_' + companyId;
+  const cExists = db.prepare('SELECT id FROM circuits WHERE id = ?').get(circuitId);
+  if (!cExists) {
+    db.prepare(`
+      INSERT INTO circuits (id, company_id, name, description, category, mail_direction, current_version, is_active, created_at)
+      VALUES (?, ?, 'Courrier entrant standard', 'Circuit complet avec retour obligatoire au Secrétariat.', 'Administration générale', 'ENTRANT', 1, 1, '2026-11-23 23:14:32')
+    `).run(circuitId, companyId);
+
+    const stepsJson = JSON.stringify([
+      { stepOrder: 1, name: 'Réception & enregistrement Secrétariat', stepType: 'SECRETARIAT_RECEPTION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: 'svc_sec_' + companyId, slaHours: 4 },
+      { stepOrder: 2, name: 'Orientation vers service compétent', stepType: 'ORIENTATION', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: 'svc_sec_' + companyId, slaHours: 8 },
+      { stepOrder: 3, name: 'Affectation par le Responsable', stepType: 'RESPONSABLE_ASSIGN', mode: 'SEQUENTIAL', targetRole: 'RESPONSABLE', slaHours: 12 },
+      { stepOrder: 4, name: 'Traitement par l’Agent', stepType: 'AGENT_TREATMENT', mode: 'SEQUENTIAL', targetRole: 'AGENT', slaHours: 48 },
+      { stepOrder: 5, name: 'Contrôle du Responsable', stepType: 'RESPONSABLE_REVIEW', mode: 'SEQUENTIAL', targetRole: 'RESPONSABLE', slaHours: 24 },
+      { stepOrder: 6, name: 'Retour obligatoire au Secrétariat — Contrôle final', stepType: 'SECRETARIAT_RETURN', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: 'svc_sec_' + companyId, slaHours: 12 },
+      { stepOrder: 7, name: 'Expédition / Classement et Archivage', stepType: 'SECRETARIAT_DISPATCH_ARCHIVE', mode: 'SEQUENTIAL', targetRole: 'AGENT', targetServiceId: 'svc_sec_' + companyId, slaHours: 12 },
+    ]);
+
+    db.prepare(`
+      INSERT INTO circuit_versions (id, circuit_id, company_id, version_number, steps_json, created_at)
+      VALUES (?, ?, ?, 1, ?, '2026-11-23 23:14:32')
+    `).run('cv_std_' + companyId + '_1', circuitId, companyId, stepsJson);
+  }
 }
