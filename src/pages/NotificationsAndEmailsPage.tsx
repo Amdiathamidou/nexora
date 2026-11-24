@@ -150,8 +150,8 @@ export function NotificationsAndEmailsPage({ onNavigate }: { onNavigate: (page: 
                 <div key={e.id} className="p-5 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                     <span className="font-semibold text-slate-900 dark:text-white">{e.subject}</span>
-                    <span className="font-mono text-emerald-700 dark:text-emerald-400">
-                      {e.delivery_status === 'SENT_SMTP' ? 'Envoyé SMTP' : 'Consigné'} · {e.created_at.slice(0, 16)}
+                    <span className={`font-mono ${e.delivery_status === 'SENT_SMTP' ? 'text-emerald-700 dark:text-emerald-400' : e.delivery_status === 'FAILED' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {e.delivery_status === 'SENT_SMTP' ? 'Envoyé SMTP' : e.delivery_status === 'FAILED' ? 'Échec SMTP' : 'Consigné'} · {e.created_at.slice(0, 16)}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">

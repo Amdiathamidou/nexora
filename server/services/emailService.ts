@@ -109,11 +109,17 @@ export async function notifyUserOnMailAssignment(args: {
     role: string;
   };
   serviceId?: string | null;
+  assignedById?: string | null;
   assignedByName: string;
   actionRequired?: string;
 }): Promise<number> {
-  const { companyId, mail, targetUser, assignedByName, actionRequired } = args;
+  const { companyId, mail, targetUser, assignedById, assignedByName, actionRequired } = args;
   if (!targetUser.email) return 0;
+
+  // Règle anti-doublon : ne pas notifier si l'utilisateur s'assigne à lui-même
+  if (assignedById && targetUser.id === assignedById) {
+    return 0;
+  }
 
   const roleLabel =
     targetUser.role === 'PRESIDENT'
@@ -132,14 +138,14 @@ export async function notifyUserOnMailAssignment(args: {
   const subject =
     targetUser.role === 'PRESIDENT'
       ? `[NEXORA] Courrier pour décision / validation présidentielle — ${mail.reference}`
-      : `[NEXORA] Nouveau courrier assigné — ${mail.reference} : ${mail.subject}`;
+      : `[NEXORA] Nouveau courrier transmis — ${mail.reference} : ${mail.subject}`;
 
   const bodyText = [
     salutation,
     ``,
     targetUser.role === 'PRESIDENT'
       ? `Un courrier vient de vous être soumis pour décision, validation ou signature présidentielle dans la plateforme NEXORA.`
-      : `Un courrier vient de vous être affecté / orienté par ${assignedByName}.`,
+      : `Un courrier vient de vous être transmis / affecté par ${assignedByName}.`,
     ``,
     `• Référence interne : ${mail.reference}`,
     `• Sens du courrier : ${mail.direction}`,
@@ -150,12 +156,12 @@ export async function notifyUserOnMailAssignment(args: {
     actionRequired ? `• Action demandée : ${actionRequired}` : null,
     `• Transmis / affecté par : ${assignedByName}`,
     ``,
-    `Connectez-vous à votre espace NEXORA pour consulter le document, rédiger ou apposer votre visa / signature :`,
+    `Connectez-vous à votre espace NEXORA pour consulter le document et procéder à son traitement.`,
     ``,
     `— Plateforme NEXORA`,
   ].filter(Boolean).join('\n');
 
-  await dispatchEmail({
+  const res = await dispatchEmail({
     companyId,
     mailId: mail.id,
     recipientUserId: targetUser.id,
@@ -166,13 +172,15 @@ export async function notifyUserOnMailAssignment(args: {
     bodyText,
   });
 
-  return 1;
+  return res.status === 'SENT_SMTP' ? 1 : 0;
 }
 
 /**
- * RÈGLE MÉTIER IMPÉRATIVE :
- * Dès qu'un agent reçoit un courrier (affectation directe, étape de circuit ou transfert),
- * le chef de son département (Responsable du service) reçoit automatiquement un e-mail.
+ * RÈGLE MÉTIER HIÉRARCHIQUE :
+ * Lorsqu'un courrier est envoyé à un Agent, son Chef de service réellement responsable
+ * doit également recevoir un email l'informant que son agent vient de recevoir un courrier.
+ * EXCEPTION IMPORTANTE : si l'expéditeur (assignedById) est lui-même le Chef de service de cet Agent,
+ * il ne reçoit pas de notification supplémentaire pour éviter les doublons.
  */
 export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
   companyId: string;
@@ -192,12 +200,12 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
     email: string;
   };
   serviceId?: string | null;
+  assignedById?: string | null;
   assignedByName: string;
 }): Promise<number> {
-  const { companyId, mail, agentUser, serviceId, assignedByName } = args;
+  const { companyId, mail, agentUser, serviceId, assignedById, assignedByName } = args;
 
-  // Always resolve the agent's own department(s) first ("le chef de son département"),
-  // plus fallback to explicit serviceId if the agent is not yet mapped in user_services.
+  // Identifier le ou les services auxquels appartient réellement cet agent
   const agentServices = db
     .prepare(`
       SELECT s.id, s.name, s.manager_user_id
@@ -211,6 +219,8 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
   for (const s of agentServices) {
     targetServicesMap.set(s.id, s);
   }
+
+  // Fallback si l'agent n'a pas encore de lien explicite dans user_services mais qu'un serviceId est spécifié
   if (serviceId && !targetServicesMap.has(serviceId) && agentServices.length === 0) {
     const explicitSvc = db
       .prepare('SELECT id, name, manager_user_id FROM services WHERE id = ? AND company_id = ?')
@@ -219,14 +229,13 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
   }
 
   const targetServices = Array.from(targetServicesMap.values());
-
-  // Fallback: if service has no manager_user_id, find any active RESPONSABLE linked to that service
   const notifiedManagerIds = new Set<string>();
   let emailsSent = 0;
 
   for (const svc of targetServices) {
     const managers: Array<{ id: string; full_name: string; email: string }> = [];
 
+    // 1. Chef désigné du service (manager_user_id)
     if (svc.manager_user_id) {
       const m = db
         .prepare('SELECT id, full_name, email FROM users WHERE id = ? AND company_id = ? AND is_active = 1')
@@ -234,6 +243,7 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
       if (m) managers.push(m);
     }
 
+    // 2. Si aucun manager_user_id explicite, chercher les RESPONSABLE rattachés au service
     if (managers.length === 0) {
       const fallbackManagers = db
         .prepare(`
@@ -247,30 +257,36 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
     }
 
     for (const head of managers) {
+      // EXCEPTION : Si l'expéditeur est lui-même le Chef de service de cet agent, ne pas envoyer de doublon
+      if (assignedById && head.id === assignedById) {
+        continue;
+      }
+
+      // Éviter d'envoyer deux fois au même manager si l'agent est dans plusieurs sous-services
       if (notifiedManagerIds.has(head.id)) continue;
       notifiedManagerIds.add(head.id);
 
-      const subject = `[NEXORA] Département ${svc.name} — Courrier ${mail.reference} reçu par l'agent ${agentUser.full_name}`;
+      const subject = `[NEXORA] Département ${svc.name} — Courrier ${mail.reference} transmis à votre agent ${agentUser.full_name}`;
       const bodyText = [
         `Bonjour ${head.full_name},`,
         ``,
-        `En tant que chef du département "${svc.name}", nous vous informons qu'un courrier vient d'être transmis/affecté à un agent de votre service.`,
+        `En tant que chef du département "${svc.name}", nous vous informons qu'un nouveau courrier vient d'être transmis / affecté à un agent de votre service :`,
         ``,
         `• Référence interne : ${mail.reference}`,
-        `• Type : ${mail.direction}`,
+        `• Sens : ${mail.direction}`,
         `• Objet : ${mail.subject}`,
         `• Expéditeur : ${mail.sender_name || 'Interne'} ${mail.sender_org ? `(${mail.sender_org})` : ''}`,
         `• Priorité : ${mail.priority}`,
         `• Échéance : ${mail.due_date || 'Non définie'}`,
         `• Agent destinataire : ${agentUser.full_name} (${agentUser.email})`,
-        `• Transmis / affecté par : ${assignedByName}`,
+        `• Transmis par : ${assignedByName}`,
         ``,
-        `Vous pouvez suivre l'avancement du traitement depuis votre Tableau de bord Responsable dans NEXORA.`,
+        `Vous pouvez suivre l'avancement du traitement depuis votre espace NEXORA.`,
         ``,
         `— Plateforme NEXORA`,
       ].join('\n');
 
-      await dispatchEmail({
+      const sendRes = await dispatchEmail({
         companyId,
         mailId: mail.id,
         recipientUserId: head.id,
@@ -282,7 +298,7 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
         bodyText,
       });
 
-      // Also create an in-app notification for the department head
+      // Notification in-app
       db.prepare(`
         INSERT INTO notifications (id, company_id, user_id, mail_id, event_type, title, message)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -292,11 +308,13 @@ export async function notifyDepartmentHeadOnAgentMailAssignment(args: {
         head.id,
         mail.id,
         'EMAIL_CHEF_DEPARTEMENT',
-        `E-mail envoyé : ${mail.reference} affecté à ${agentUser.full_name}`,
-        `Un e-mail d'alerte a été envoyé à ${head.email} suite à la réception du courrier ${mail.reference} par l'agent ${agentUser.full_name} (${svc.name}).`
+        `Courrier ${mail.reference} transmis à ${agentUser.full_name}`,
+        `Le courrier ${mail.reference} a été transmis à votre agent ${agentUser.full_name} (${svc.name}) par ${assignedByName}.`
       );
 
-      emailsSent += 1;
+      if (sendRes.status === 'SENT_SMTP') {
+        emailsSent += 1;
+      }
     }
   }
 

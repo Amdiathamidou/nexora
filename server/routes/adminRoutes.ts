@@ -506,6 +506,7 @@ adminRoutes.post('/tasks/:id/transfer', requireAuth, requireCompanyScope, async 
     targetUserId: String(targetUserId),
     serviceId: serviceId || task.assigned_service_id,
     taskId,
+    assignedById: user.id,
     assignedByName: user.fullName,
   });
 

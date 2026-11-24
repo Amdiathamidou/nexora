@@ -648,6 +648,7 @@ mailRoutes.post('/mails', requireAuth, requireCompanyScope, async (req: Authenti
       mail: createdMail,
       targetUserId: String(assignedAgentId),
       serviceId: currentServiceId,
+      assignedById: user.id,
       assignedByName: user.fullName,
     });
   }
@@ -1068,6 +1069,7 @@ mailRoutes.post('/mails/:id/orient', requireAuth, requireCompanyScope, async (re
       mail,
       targetUserId: String(assignedAgentId),
       serviceId: serviceId || null,
+      assignedById: user.id,
       assignedByName: user.fullName,
     });
   } else if (serviceId && !assignedAgentId) {
@@ -1194,6 +1196,7 @@ mailRoutes.post('/mails/:id/assign-agent', requireAuth, requireCompanyScope, asy
     targetUserId: targetAgent.id,
     serviceId: effectiveServiceId,
     taskId,
+    assignedById: user.id,
     assignedByName: user.fullName,
   });
 

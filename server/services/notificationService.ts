@@ -72,7 +72,9 @@ export async function notifyMailAssignedToUser(args: {
   targetUserId: string;
   serviceId?: string | null;
   taskId?: string | null;
+  assignedById?: string | null;
   assignedByName: string;
+  actionRequired?: string;
 }): Promise<number> {
   const targetUser = db
     .prepare('SELECT id, full_name, email, role FROM users WHERE id = ? AND company_id = ? AND is_active = 1')
@@ -82,6 +84,7 @@ export async function notifyMailAssignedToUser(args: {
 
   if (!targetUser) return 0;
 
+  // Création de la notification in-app
   createNotification({
     companyId: args.companyId,
     userId: targetUser.id,
@@ -92,26 +95,28 @@ export async function notifyMailAssignedToUser(args: {
     message: `Le courrier "${args.mail.subject}" vous a été affecté par ${args.assignedByName}.`,
   });
 
-  // CRITICAL BUSINESS RULE: Whenever an Agent receives a mail, the head of their department receives an email!
   let emailsSent = 0;
+
+  // RÈGLE 1 : TOUT utilisateur destinataire (Président, Responsable, Agent, Admin) reçoit un email
+  emailsSent += await notifyUserOnMailAssignment({
+    companyId: args.companyId,
+    mail: args.mail,
+    targetUser,
+    serviceId: args.serviceId,
+    assignedById: args.assignedById,
+    assignedByName: args.assignedByName,
+    actionRequired: args.actionRequired,
+  });
+
+  // RÈGLE 2 : Si le destinataire est un Agent, son Chef de service reçoit également un email d'information.
+  // Exception : si l'expéditeur (assignedById) est lui-même son Chef de service, aucun doublon n'est envoyé.
   if (targetUser.role === 'AGENT') {
     emailsSent += await notifyDepartmentHeadOnAgentMailAssignment({
       companyId: args.companyId,
       mail: args.mail,
       agentUser: targetUser,
       serviceId: args.serviceId,
-      assignedByName: args.assignedByName,
-    });
-  }
-
-  // Si le destinataire est le Président, un Responsable ou un collaborateur désigné
-  // On lui envoie directement un email de notification
-  if (targetUser.role === 'PRESIDENT' || targetUser.role === 'RESPONSABLE') {
-    emailsSent += await notifyUserOnMailAssignment({
-      companyId: args.companyId,
-      mail: args.mail,
-      targetUser,
-      serviceId: args.serviceId,
+      assignedById: args.assignedById,
       assignedByName: args.assignedByName,
     });
   }

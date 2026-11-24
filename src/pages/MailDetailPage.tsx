@@ -1384,11 +1384,11 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
             <div className="flex items-center gap-2">
               <MailCheck className="w-4 h-4 text-emerald-600" />
-              <h2 className="font-display text-base font-bold">E-mails départementaux envoyés ({emailLogs.length})</h2>
+              <h2 className="font-display text-base font-bold">E-mails de notification envoyés ({emailLogs.length})</h2>
             </div>
             {emailLogs.length === 0 ? (
               <p className="text-xs text-slate-500">
-                Aucun e-mail départemental encore déclenché pour ce courrier. Dès qu’un agent recevra ce courrier, le chef de son département recevra un e-mail ici.
+                Aucun e-mail de notification automatique n’a encore été déclenché pour ce courrier.
               </p>
             ) : (
               <div className="space-y-2.5">
@@ -1396,10 +1396,14 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                   <div key={e.id} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1">
                     <p className="font-semibold text-slate-900 dark:text-white">{e.subject}</p>
                     <p className="text-slate-600 dark:text-slate-300">
-                      Chef de département ({e.department_name}) : {e.recipient_name} &lt;{e.recipient_email}&gt;
+                      Destinataire {e.department_name ? `(${e.department_name})` : ''} : {e.recipient_name} &lt;{e.recipient_email}&gt;
                     </p>
-                    <p className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
-                      {e.delivery_status === 'SENT_SMTP' ? 'Livré via SMTP' : 'Enregistré dans la file d’envoi'} · {e.created_at.slice(0, 16)}
+                    <p className={`font-mono text-[11px] ${e.delivery_status === 'SENT_SMTP' ? 'text-emerald-700 dark:text-emerald-400' : e.delivery_status === 'FAILED' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {e.delivery_status === 'SENT_SMTP'
+                        ? 'Envoyé avec succès via SMTP'
+                        : e.delivery_status === 'FAILED'
+                        ? `Échec d'envoi (${e.error_message || 'Erreur SMTP'})`
+                        : 'Enregistré dans la file d’attente'} · {e.created_at.slice(0, 16)}
                     </p>
                   </div>
                 ))}

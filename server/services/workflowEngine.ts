@@ -199,6 +199,7 @@ export async function startWorkflowForMail(args: {
         targetUserId: firstStep.assigned_user_id,
         serviceId: firstStep.assigned_service_id,
         taskId,
+        assignedById: actor.id,
         assignedByName: actor.fullName,
       });
     }
@@ -1031,6 +1032,7 @@ export async function applyWorkflowDecision(args: {
       targetUserId: nextUserId,
       serviceId: nextServiceId,
       taskId,
+      assignedById: actor.id,
       assignedByName: actor.fullName,
     });
   }
