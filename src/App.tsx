@@ -50,6 +50,14 @@ function NexoraRouter() {
     );
   }
 
+  // Si l'URL contient un lien d'activation (?action=activate&token=...), afficher directement la page d'activation
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const isActivationFlow = urlParams?.get('action') === 'activate' && Boolean(urlParams?.get('token'));
+
+  if (isActivationFlow) {
+    return <AuthPages initialMode="activate" onBackPublic={() => (window.location.href = '/')} />;
+  }
+
   if (!user) {
     if (publicMode === 'login') {
       return <AuthPages initialMode="login" onBackPublic={() => setPublicMode('site')} />;

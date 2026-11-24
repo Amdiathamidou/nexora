@@ -550,6 +550,7 @@ adminRoutes.get('/users', requireAuth, requireCompanyScope, (req: AuthenticatedR
       SELECT u.id, u.company_id, u.full_name, u.job_title, u.email, u.phone, u.role, u.is_active, 
              u.avatar_url, u.permissions_json, u.department_id, u.service_id, u.unit_name, 
              u.superior_user_id, u.permissions_audit_json, u.created_at,
+             u.is_activated, u.invitation_expires_at,
              sup.full_name as superior_name,
              dept.name as department_name,
              svc.name as service_name
@@ -639,9 +640,10 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   }
 
   const userId = newId('usr');
-  // Générer un jeton d'invitation sécurisé
+  // Générer un jeton d'invitation sécurisé valide 24 heures
   const { randomBytes } = await import('node:crypto');
   const invitationToken = randomBytes(24).toString('hex');
+  const invitationExpiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
   const auditRecord = {
     suggestedPermissions: permissionsAudit?.suggestedPermissions || {},
@@ -656,9 +658,9 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       INSERT INTO users (
         id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, 
         permissions_json, department_id, service_id, unit_name, superior_user_id, permissions_audit_json,
-        invitation_token, is_activated
+        invitation_token, invitation_expires_at, is_activated
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 0)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `).run(
       userId,
       companyId,
@@ -674,7 +676,8 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       String(unitName || '').trim(),
       superiorUserId || null,
       JSON.stringify(auditRecord),
-      invitationToken
+      invitationToken,
+      invitationExpiresAt
     );
 
     if (Array.isArray(serviceIds)) {
@@ -708,7 +711,7 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       recipientName: fullName,
       triggerEvent: 'USER_INVITATION',
       subject: `[NEXORA] Invitation à rejoindre ${companyName} (${jobTitle || role})`,
-      bodyText: `Bonjour ${fullName},\n\nVous avez été invité(e) par l'administrateur à rejoindre l'espace NEXORA de "${companyName}" en tant que ${jobTitle || role}.\n\nPour activer votre compte, configurer votre mot de passe et accéder à votre tableau de bord, veuillez cliquer sur le lien ci-dessous :\n\n${activationUrl}\n\nCe lien est strictement confidentiel.\n\nCordialement,\nL'équipe NEXORA & ${companyName}`,
+      bodyText: `Bonjour ${fullName},\n\nVous avez été invité(e) par l'administrateur à rejoindre l'espace NEXORA de "${companyName}" en tant que ${jobTitle || role}.\n\nPour activer votre compte, configurer votre mot de passe et accéder à votre espace, veuillez cliquer sur le lien sécurisé ci-dessous (valable 24 heures) :\n\n${activationUrl}\n\nCe lien expire dans 24 heures. Si le délai expire, contactez votre administrateur pour recevoir une nouvelle invitation.\n\nCordialement,\nL'équipe NEXORA & ${companyName}`,
     });
   } catch (err) {
     console.warn('[Invitation] Erreur envoi email invitation :', err);
@@ -725,6 +728,65 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   });
 
   res.status(201).json({ id: userId, invitationToken, activationUrl });
+});
+
+// Endpoint pour renvoyer une invitation avec nouveau jeton valide 24h
+adminRoutes.post('/users/:id/resend-invitation', requireAuth, requireCompanyScope, requireRoles('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
+  const actor = req.user!;
+  const companyId = actor.companyId!;
+  const targetId = String(req.params.id);
+
+  const target = db
+    .prepare('SELECT id, full_name, email, role, job_title, is_activated FROM users WHERE id = ? AND company_id = ?')
+    .get(targetId, companyId) as { id: string; full_name: string; email: string; role: string; job_title: string; is_activated: number } | undefined;
+
+  if (!target) {
+    res.status(404).json({ error: 'Utilisateur introuvable.' });
+    return;
+  }
+
+  const { randomBytes } = await import('node:crypto');
+  const newToken = randomBytes(24).toString('hex');
+  const newExpiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+  db.prepare(`
+    UPDATE users 
+    SET invitation_token = ?, invitation_expires_at = ?, is_activated = 0
+    WHERE id = ? AND company_id = ?
+  `).run(newToken, newExpiresAt, targetId, companyId);
+
+  const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
+  const companyName = company?.legal_name || 'Votre entreprise';
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol || 'http';
+  const activationUrl = `${protocol}://${host}/?action=activate&token=${newToken}&email=${encodeURIComponent(target.email)}`;
+
+  try {
+    const { dispatchEmail } = await import('../services/emailService.ts');
+    await dispatchEmail({
+      companyId,
+      recipientUserId: target.id,
+      recipientEmail: target.email,
+      recipientName: target.full_name,
+      triggerEvent: 'USER_INVITATION_RESEND',
+      subject: `[NEXORA] Nouvelle invitation pour rejoindre ${companyName}`,
+      bodyText: `Bonjour ${target.full_name},\n\nVotre administrateur vous a renvoyé une invitation pour rejoindre l'espace NEXORA de "${companyName}".\n\nPour activer votre compte et configurer votre mot de passe, veuillez cliquer sur ce nouveau lien (valable 24 heures) :\n\n${activationUrl}\n\nCordialement,\nL'équipe NEXORA & ${companyName}`,
+    });
+  } catch (err) {
+    console.warn('[Resend] Erreur envoi email :', err);
+  }
+
+  logAudit({
+    companyId,
+    userId: actor.id,
+    userName: actor.fullName,
+    action: 'RENVOI_INVITATION_UTILISATEUR',
+    entityType: 'USER',
+    entityId: target.id,
+    newValue: { email: target.email, expiresAt: newExpiresAt },
+  });
+
+  res.json({ ok: true, message: `L'invitation a été renvoyée à ${target.email}.` });
 });
 
 adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {

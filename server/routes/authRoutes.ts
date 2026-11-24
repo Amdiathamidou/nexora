@@ -316,12 +316,13 @@ authRoutes.post('/activate-account', (req: AuthenticatedRequest, res: Response) 
     return;
   }
 
-  const user = db.prepare('SELECT id, role, company_id, full_name, email FROM users WHERE invitation_token = ?').get(String(token).trim()) as {
+  const user = db.prepare('SELECT id, role, company_id, full_name, email, invitation_expires_at FROM users WHERE invitation_token = ?').get(String(token).trim()) as {
     id: string;
     role: string;
     company_id: string | null;
     full_name: string;
     email: string;
+    invitation_expires_at: string | null;
   } | undefined;
 
   if (!user) {
@@ -329,7 +330,13 @@ authRoutes.post('/activate-account', (req: AuthenticatedRequest, res: Response) 
     return;
   }
 
-  db.prepare('UPDATE users SET password_hash = ?, invitation_token = NULL, is_activated = 1 WHERE id = ?').run(
+  // Vérification de la validité de 24h
+  if (user.invitation_expires_at && new Date(user.invitation_expires_at).getTime() < Date.now()) {
+    res.status(400).json({ error: 'Ce lien d’invitation a expiré (délai de 24h dépassé). Veuillez contacter votre administrateur pour recevoir une nouvelle invitation.' });
+    return;
+  }
+
+  db.prepare('UPDATE users SET password_hash = ?, invitation_token = NULL, invitation_expires_at = NULL, is_activated = 1 WHERE id = ?').run(
     hashPassword(String(password)),
     user.id
   );

@@ -33,6 +33,8 @@ export interface UserRow {
   role: UserRole;
   is_active: number;
   permissions: UserPermissions;
+  is_activated?: number;
+  invitation_expires_at?: string | null;
   department_id?: string | null;
   service_id?: string | null;
   unit_name?: string;
@@ -416,6 +418,20 @@ export function UsersPage() {
       await loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur');
+    }
+  };
+
+  const handleResendInvitation = async (u: UserRow) => {
+    setError('');
+    setFeedback('');
+    try {
+      const res = await apiFetch<{ ok: boolean; message: string }>(`/api/users/${u.id}/resend-invitation`, {
+        method: 'POST',
+      });
+      setFeedback(res.message || `Invitation renvoyée avec succès à ${u.email}.`);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du renvoi de l’invitation.');
     }
   };
 
@@ -985,11 +1001,31 @@ export function UsersPage() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-xs">
-                      <span className={u.is_active === 1 ? 'text-emerald-700 dark:text-emerald-400 font-medium' : 'text-red-600'}>
-                        {u.is_active === 1 ? 'Actif' : 'Désactivé'}
-                      </span>
+                      {u.is_activated === 0 ? (
+                        <div className="space-y-0.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                            Invitation en attente
+                          </span>
+                          <p className="text-[10px] text-slate-400">Expire sous 24h</p>
+                        </div>
+                      ) : (
+                        <span className={u.is_active === 1 ? 'text-emerald-700 dark:text-emerald-400 font-medium' : 'text-red-600'}>
+                          {u.is_active === 1 ? 'Actif' : 'Désactivé'}
+                        </span>
+                      )}
                     </td>
-                    <td className="py-3 px-4 text-right space-x-3">
+                    <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                      {u.is_activated === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleResendInvitation(u)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+                          title="Renvoyer un e-mail d'invitation avec un nouveau lien valable 24h"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Renvoyer l'invitation</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(u)}
