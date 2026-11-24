@@ -300,6 +300,61 @@ authRoutes.post('/reset-password', (req: AuthenticatedRequest, res: Response) =>
   res.json({ message: 'Mot de passe mis à jour avec succès. Vous pouvez vous connecter.' });
 });
 
+// Endpoint d'activation de compte suite à invitation (XAMPP-like)
+authRoutes.post('/activate-account', (req: AuthenticatedRequest, res: Response) => {
+  const { token, password, confirmPassword } = req.body ?? {};
+  if (!token || !password) {
+    res.status(400).json({ error: 'Jeton d’activation et mot de passe requis.' });
+    return;
+  }
+  if (String(password).length < 8) {
+    res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
+    return;
+  }
+  if (confirmPassword !== undefined && password !== confirmPassword) {
+    res.status(400).json({ error: 'La confirmation du mot de passe ne correspond pas.' });
+    return;
+  }
+
+  const user = db.prepare('SELECT id, role, company_id, full_name, email FROM users WHERE invitation_token = ?').get(String(token).trim()) as {
+    id: string;
+    role: string;
+    company_id: string | null;
+    full_name: string;
+    email: string;
+  } | undefined;
+
+  if (!user) {
+    res.status(400).json({ error: 'Jeton d’activation invalide ou déjà utilisé.' });
+    return;
+  }
+
+  db.prepare('UPDATE users SET password_hash = ?, invitation_token = NULL, is_activated = 1 WHERE id = ?').run(
+    hashPassword(String(password)),
+    user.id
+  );
+
+  const authUser = loadAuthUser(user.id)!;
+  const sessionToken = signToken({ userId: authUser.id, role: authUser.role, companyId: authUser.companyId });
+  setSessionCookie(req, res, sessionToken);
+
+  logAudit({
+    companyId: user.company_id || 'system',
+    userId: user.id,
+    userName: user.full_name,
+    action: 'ACTIVATION_COMPTE',
+    entityType: 'USER',
+    entityId: user.id,
+    context: 'Activation du compte et définition du mot de passe personnel.',
+  });
+
+  res.json({
+    message: 'Compte activé avec succès.',
+    token: sessionToken,
+    user: authUser,
+  });
+});
+
 authRoutes.post('/logout', (req: AuthenticatedRequest, res: Response) => {
   const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
   res.clearCookie('nexora_session', {

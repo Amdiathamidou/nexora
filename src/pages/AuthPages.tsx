@@ -4,7 +4,7 @@ import { NexoraLogo } from '../components/common/NexoraLogo.tsx';
 import { apiFetch } from '../api/client.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 
-type AuthScreenMode = 'login' | 'register' | 'forgot';
+type AuthScreenMode = 'login' | 'register' | 'forgot' | 'activate';
 type EntityType = 'entreprise' | 'particulier';
 
 interface AuthPagesProps {
@@ -72,6 +72,26 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
   const [newPassword, setNewPassword] = useState('');
   const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [resetMessage, setResetMessage] = useState('');
+
+  // Section Activation de compte invité
+  const [actToken, setActToken] = useState('');
+  const [actEmail, setActEmail] = useState('');
+  const [actPassword, setActPassword] = useState('');
+  const [actPasswordConfirm, setActPasswordConfirm] = useState('');
+  const [showActPassword, setShowActPassword] = useState(false);
+
+  // Détecter action=activate dans l'URL
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const token = params.get('token');
+    const mail = params.get('email');
+    if (action === 'activate' && token) {
+      setMode('activate');
+      setActToken(token);
+      if (mail) setActEmail(mail);
+    }
+  }, []);
 
   // ═══ FORMULAIRE D'INSCRIPTION COMPLET XAMPP ═══
   // Section Entreprise
@@ -242,6 +262,32 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
       setEmail(resetEmail);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleActivateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (actPassword !== actPasswordConfirm) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await apiFetch<{ token: string; user: any; message: string }>('/api/auth/activate-account', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: actToken,
+          password: actPassword,
+          confirmPassword: actPasswordConfirm,
+        }),
+      });
+      // Rafraîchir la session ou connecter l'utilisateur directement
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de l’activation.');
     } finally {
       setSubmitting(false);
     }
@@ -952,6 +998,80 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
               >
                 ← Retour à la connexion
               </button>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              4. ACTIVATION DE COMPTE INVITÉ (Identique XAMPP)
+          ══════════════════════════════════════════════════════════════════════════ */}
+          {mode === 'activate' && (
+            <div className="max-w-md mx-auto">
+              <div className="mb-6">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 mb-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Activation de votre compte collaborateur</span>
+                </div>
+                <h1 className="text-xl font-extrabold text-slate-900">Bienvenue sur Nexora !</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Vous avez été invité(e) à rejoindre votre organisation. Veuillez définir votre mot de passe personnel pour activer votre compte.
+                </p>
+                {actEmail && (
+                  <p className="text-xs font-semibold text-slate-700 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    Compte : <span className="text-indigo-600">{actEmail}</span>
+                  </p>
+                )}
+              </div>
+
+              {error && (
+                <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <form onSubmit={handleActivateAccount} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Choisissez votre mot de passe (min. 8 car.)</label>
+                  <div className="relative">
+                    <input
+                      type={showActPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={actPassword}
+                      onChange={(e) => setActPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowActPassword(!showActPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showActPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Confirmez votre mot de passe</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={actPasswordConfirm}
+                    onChange={(e) => setActPasswordConfirm(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm transition-all disabled:opacity-50"
+                >
+                  {submitting ? 'Activation en cours...' : 'Activer mon compte & Accéder à mon espace'}
+                </button>
+              </form>
             </div>
           )}
 

@@ -600,12 +600,12 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   const actor = req.user!;
   const companyId = actor.companyId!;
   const { 
-    fullName, jobTitle, email, phone, password, role, serviceIds, permissions,
+    fullName, jobTitle, email, phone, role, serviceIds, permissions,
     departmentId, serviceId, unitName, superiorUserId, permissionsAudit
   } = req.body ?? {};
 
-  if (!fullName || !email || !password || !['ADMIN', 'PRESIDENT', 'RESPONSABLE', 'AGENT'].includes(role)) {
-    res.status(400).json({ error: 'Nom, e-mail, mot de passe et rôle valide requis.' });
+  if (!fullName || !email || !['ADMIN', 'PRESIDENT', 'RESPONSABLE', 'AGENT'].includes(role)) {
+    res.status(400).json({ error: 'Nom, e-mail et rôle valide requis.' });
     return;
   }
 
@@ -639,6 +639,10 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   }
 
   const userId = newId('usr');
+  // Générer un jeton d'invitation sécurisé
+  const { randomBytes } = await import('node:crypto');
+  const invitationToken = randomBytes(24).toString('hex');
+
   const auditRecord = {
     suggestedPermissions: permissionsAudit?.suggestedPermissions || {},
     manualModifications: permissionsAudit?.manualModifications || false,
@@ -651,9 +655,10 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
     db.prepare(`
       INSERT INTO users (
         id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, 
-        permissions_json, department_id, service_id, unit_name, superior_user_id, permissions_audit_json
+        permissions_json, department_id, service_id, unit_name, superior_user_id, permissions_audit_json,
+        invitation_token, is_activated
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 0)
     `).run(
       userId,
       companyId,
@@ -661,14 +666,15 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       String(jobTitle || role).trim(),
       String(email).trim().toLowerCase(),
       String(phone || '').trim(),
-      hashPassword(String(password)),
+      hashPassword(randomBytes(16).toString('hex')), // mot de passe provisoire non utilisable
       role,
       JSON.stringify(sanitizedPermissions),
       departmentId || null,
       serviceId || null,
       String(unitName || '').trim(),
       superiorUserId || null,
-      JSON.stringify(auditRecord)
+      JSON.stringify(auditRecord),
+      invitationToken
     );
 
     if (Array.isArray(serviceIds)) {
@@ -686,17 +692,39 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
     }
   })();
 
+  // Envoi de l'e-mail d'invitation avec le lien d'activation du compte
+  const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
+  const companyName = company?.legal_name || 'Votre entreprise';
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol || 'http';
+  const activationUrl = `${protocol}://${host}/?action=activate&token=${invitationToken}&email=${encodeURIComponent(email)}`;
+
+  try {
+    const { dispatchEmail } = await import('../services/emailService.ts');
+    await dispatchEmail({
+      companyId,
+      recipientUserId: userId,
+      recipientEmail: email,
+      recipientName: fullName,
+      triggerEvent: 'USER_INVITATION',
+      subject: `[NEXORA] Invitation à rejoindre ${companyName} (${jobTitle || role})`,
+      bodyText: `Bonjour ${fullName},\n\nVous avez été invité(e) par l'administrateur à rejoindre l'espace NEXORA de "${companyName}" en tant que ${jobTitle || role}.\n\nPour activer votre compte, configurer votre mot de passe et accéder à votre tableau de bord, veuillez cliquer sur le lien ci-dessous :\n\n${activationUrl}\n\nCe lien est strictement confidentiel.\n\nCordialement,\nL'équipe NEXORA & ${companyName}`,
+    });
+  } catch (err) {
+    console.warn('[Invitation] Erreur envoi email invitation :', err);
+  }
+
   logAudit({
     companyId,
     userId: actor.id,
     userName: actor.fullName,
-    action: 'CREATION_UTILISATEUR',
+    action: 'INVITATION_UTILISATEUR',
     entityType: 'USER',
     entityId: userId,
     newValue: { fullName, email, role, jobTitle, superiorUserId, departmentId, serviceId },
   });
 
-  res.status(201).json({ id: userId });
+  res.status(201).json({ id: userId, invitationToken, activationUrl });
 });
 
 adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {

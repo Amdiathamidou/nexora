@@ -467,6 +467,8 @@ export function initSchema(): void {
   safeAddCol('users', "unit_name TEXT DEFAULT ''");
   safeAddCol('users', "superior_user_id TEXT DEFAULT NULL");
   safeAddCol('users', "permissions_audit_json TEXT DEFAULT '{}'");
+  safeAddCol('users', "invitation_token TEXT DEFAULT NULL");
+  safeAddCol('users', "is_activated INTEGER DEFAULT 1");
   safeAddCol('mails', "draft_response_text TEXT DEFAULT ''");
   safeAddCol('mails', "draft_response_updated_by TEXT DEFAULT NULL");
   safeAddCol('mails', "draft_response_updated_at TEXT DEFAULT NULL");
