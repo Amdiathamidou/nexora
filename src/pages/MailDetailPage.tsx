@@ -134,6 +134,11 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [parallelRuleChoice, setParallelRuleChoice] = useState<'ALL' | 'MIN_COUNT' | 'CONSULTATIVE'>('ALL');
   const [parallelMinApprovals, setParallelMinApprovals] = useState(2);
   const [selectedParallelUserIds, setSelectedParallelUserIds] = useState<string[]>([]);
+
+  // Sequential multi-step builder state
+  const [sequentialStepsList, setSequentialStepsList] = useState<
+    Array<{ id: string; userId: string; role: string; serviceId: string; instructions: string }>
+  >([]);
   const [assignAgentId, setAssignAgentId] = useState('');
   const [assignDueDate, setAssignDueDate] = useState('');
   const [assignInstructions, setAssignInstructions] = useState('');
@@ -325,19 +330,36 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
             },
           ];
         } else {
-          // Séquentiel par défaut
-          const targetU = users.find((x) => x.id === orientTargetUserId);
-          const isPresidentTarget = targetU?.role === 'PRESIDENT';
-          customStepsPayload = [
-            {
-              name: isPresidentTarget ? 'Examen & Signature du Président' : `Traitement par ${targetU?.full_name || 'le destinataire'}`,
-              mode: 'SEQUENTIAL',
-              targetRole: targetU?.role || 'RESPONSABLE',
-              targetServiceId: orientServiceId || null,
-              assignedUserId: orientTargetUserId || null,
-              slaHours: 48,
-            },
-          ];
+          // Séquentiel : prise en compte de la liste ordonnée d'étapes définies à l'avance
+          if (sequentialStepsList.length > 0) {
+            customStepsPayload = sequentialStepsList.map((st, idx) => {
+              const u = users.find((x) => x.id === st.userId);
+              const isPres = u?.role === 'PRESIDENT';
+              return {
+                stepOrder: idx + 1,
+                name: isPres ? 'Examen & Signature du Président' : `Intervention ${idx + 1} : ${u?.full_name || 'Destinataire'}`,
+                mode: 'SEQUENTIAL',
+                targetRole: u?.role || 'RESPONSABLE',
+                targetServiceId: st.serviceId || u?.role === 'PRESIDENT' ? orientServiceId : null,
+                assignedUserId: st.userId,
+                slaHours: 48,
+              };
+            });
+          } else {
+            // Étape unique par défaut si non spécifié dans la liste
+            const targetU = users.find((x) => x.id === orientTargetUserId);
+            const isPresidentTarget = targetU?.role === 'PRESIDENT';
+            customStepsPayload = [
+              {
+                name: isPresidentTarget ? 'Examen & Signature du Président' : `Traitement par ${targetU?.full_name || 'le destinataire'}`,
+                mode: 'SEQUENTIAL',
+                targetRole: targetU?.role || 'RESPONSABLE',
+                targetServiceId: orientServiceId || null,
+                assignedUserId: orientTargetUserId || null,
+                slaHours: 48,
+              },
+            ];
+          }
         }
       }
 
@@ -930,6 +952,142 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                           </select>
                         </div>
                       </div>
+
+                      {/* Configuration Circuit Séquentiel Multi-Étapes */}
+                      {circuitTypeChoice === 'SEQUENTIEL' && (
+                        <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                                Étapes ordonnées du circuit séquentiel ({sequentialStepsList.length} définie(s)) :
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                Définissez les intervenants qui agiront successivement. Seul le 1er sera notifié au lancement.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newId = 'step_' + Date.now();
+                                setSequentialStepsList([
+                                  ...sequentialStepsList,
+                                  { id: newId, userId: '', role: '', serviceId: orientServiceId || '', instructions: '' },
+                                ]);
+                              }}
+                              className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 flex items-center gap-1"
+                            >
+                              + Ajouter une étape
+                            </button>
+                          </div>
+
+                          {sequentialStepsList.length > 0 ? (
+                            <div className="space-y-2 max-h-56 overflow-y-auto p-1">
+                              {sequentialStepsList.map((st, sIdx) => {
+                                const targetUserObj = users.find((u) => u.id === st.userId);
+                                return (
+                                  <div
+                                    key={st.id}
+                                    className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-center gap-3 text-xs"
+                                  >
+                                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px]">
+                                      {sIdx + 1}
+                                    </span>
+                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <select
+                                        value={st.userId}
+                                        onChange={(e) => {
+                                          const uid = e.target.value;
+                                          const u = users.find((x) => x.id === uid);
+                                          const updated = [...sequentialStepsList];
+                                          updated[sIdx].userId = uid;
+                                          updated[sIdx].role = u?.role || '';
+                                          setSequentialStepsList(updated);
+                                        }}
+                                        className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                                      >
+                                        <option value="">Sélectionner l'intervenant {sIdx + 1}...</option>
+                                        {['PRESIDENT', 'RESPONSABLE', 'AGENT', 'ADMIN'].map((roleKey) => {
+                                          const groupUsers = users.filter((u) => u.role === roleKey);
+                                          if (groupUsers.length === 0) return null;
+                                          const groupLabel =
+                                            roleKey === 'PRESIDENT'
+                                              ? 'Présidence'
+                                              : roleKey === 'RESPONSABLE'
+                                              ? 'Responsables de Direction'
+                                              : roleKey === 'AGENT'
+                                              ? 'Agents'
+                                              : 'Administrateurs';
+                                          return (
+                                            <optgroup key={roleKey} label={groupLabel}>
+                                              {groupUsers.map((u) => (
+                                                <option key={u.id} value={u.id}>
+                                                  {u.full_name} ({u.role})
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          );
+                                        })}
+                                      </select>
+                                      <input
+                                        type="text"
+                                        placeholder="Rôle ou consigne pour cette étape..."
+                                        value={st.instructions}
+                                        onChange={(e) => {
+                                          const updated = [...sequentialStepsList];
+                                          updated[sIdx].instructions = e.target.value;
+                                          setSequentialStepsList(updated);
+                                        }}
+                                        className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSequentialStepsList(sequentialStepsList.filter((_, idx) => idx !== sIdx));
+                                      }}
+                                      className="text-red-500 hover:text-red-700 font-bold p-1 shrink-0"
+                                      title="Supprimer cette étape"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-slate-500 text-[11px] flex items-center justify-between">
+                              <span>Aucune étape supplémentaire ajoutée. Le destinataire initial recevra le courrier directement.</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Pré-remplir la 1ère étape avec le destinataire initial si renseigné
+                                  const steps = [];
+                                  if (orientTargetUserId) {
+                                    steps.push({
+                                      id: 'step_1',
+                                      userId: orientTargetUserId,
+                                      role: users.find((u) => u.id === orientTargetUserId)?.role || '',
+                                      serviceId: orientServiceId || '',
+                                      instructions: 'Étape initiale',
+                                    });
+                                  }
+                                  steps.push({
+                                    id: 'step_2',
+                                    userId: '',
+                                    role: '',
+                                    serviceId: orientServiceId || '',
+                                    instructions: '',
+                                  });
+                                  setSequentialStepsList(steps);
+                                }}
+                                className="text-blue-600 font-bold hover:underline"
+                              >
+                                + Construire un circuit séquentiel complet
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Options supplémentaires pour Parallèle ou Mixte */}
                       {(circuitTypeChoice === 'PARALLELE' || circuitTypeChoice === 'MIXTE') && (
