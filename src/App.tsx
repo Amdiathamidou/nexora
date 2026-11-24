@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppShell, type AppPage } from './components/common/AppShell.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
-import { ThemeProvider } from './context/ThemeContext.tsx';
+import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { AuthPages } from './pages/AuthPages.tsx';
 import { MailCreateAIPage } from './pages/MailCreateAIPage.tsx';
 import { MailDetailPage } from './pages/MailDetailPage.tsx';
