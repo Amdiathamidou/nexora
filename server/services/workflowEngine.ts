@@ -396,6 +396,7 @@ export function computeMailActionLock(args: {
     canUploadDocument: false,
     canDispatchOrArchive: false,
     requiresPresidentSignature: false,
+    canSign: false,
   });
 
   if (
@@ -557,6 +558,7 @@ export function computeMailActionLock(args: {
         canUploadDocument: true,
         canDispatchOrArchive: false,
         requiresPresidentSignature: false,
+        canSign: true,
       };
     }
 
@@ -600,6 +602,7 @@ export function computeMailActionLock(args: {
         canUploadDocument: true,
         canDispatchOrArchive: false,
         requiresPresidentSignature: false,
+        canSign: user.role === 'RESPONSABLE' || user.role === 'PRESIDENT',
       };
     }
 
@@ -636,6 +639,7 @@ export function computeMailActionLock(args: {
         canUploadDocument: true,
         canDispatchOrArchive: false,
         requiresPresidentSignature: true,
+        canSign: true,
         activeDelegation: applicableDelegation
           ? {
             id: applicableDelegation.id,
@@ -832,14 +836,14 @@ export async function applyWorkflowDecision(args: {
     }
   }
 
-  // When President (or delegated signer) approves on PRESIDENT_VALIDATION, resolve & persist digital signature + stamp image
+  // When President or Responsable (or delegated signer) approves, resolve & persist digital signature + stamp image
+  // Note: Les Agents ne peuvent pas signer. Seuls les Responsables et le Président peuvent apposer leur signature.
   let signatureId: string | undefined;
   let resolvedSignatureImg = '';
   let resolvedStampImg = '';
-  if (
-    (currentStep.step_type === 'PRESIDENT_VALIDATION' || actor.role === 'PRESIDENT') &&
-    decision === 'APPROUVER'
-  ) {
+  const canUserSign = actor.role === 'PRESIDENT' || actor.role === 'RESPONSABLE' || Boolean(activeDelegationForStep);
+
+  if (canUserSign && decision === 'APPROUVER') {
     const signerRow = db
       .prepare('SELECT signature_image, stamp_image FROM users WHERE id = ?')
       .get(actor.id) as { signature_image?: string; stamp_image?: string } | undefined;
@@ -936,8 +940,13 @@ export async function applyWorkflowDecision(args: {
 
   // Handle REJETER
   if (decision === 'REJETER') {
+    const rejectionMotif = (motif || observations || '').trim();
+    if (!rejectionMotif) {
+      throw new Error('Le motif du rejet est obligatoire. Veuillez préciser la raison du rejet de ce courrier.');
+    }
+
     db.prepare(`UPDATE workflow_step_executions SET status = 'REJETE', decision = 'REJETER', decision_motif = ?, observations = ?, decided_by = ?, decided_at = datetime('now') WHERE id = ?`)
-      .run(motif, observations, actor.id, currentStep.id);
+      .run(rejectionMotif, observations || rejectionMotif, actor.id, currentStep.id);
     db.prepare(`UPDATE tasks SET status = 'REJETEE', updated_at = datetime('now') WHERE workflow_step_id = ?`).run(currentStep.id);
 
     // Incoming mail must STILL return to Secrétariat!
@@ -951,15 +960,15 @@ export async function applyWorkflowDecision(args: {
         mailId,
         eventType: 'REJET_RETOUR_SECRETARIAT',
         title: `Rejet & Retour Secrétariat — ${mail.reference}`,
-        message: `Le courrier ${mail.reference} a été rejeté (${motif || 'Sans motif'}) et retourne au Secrétariat.`,
+        message: `Le courrier ${mail.reference} a été rejeté (Motif : ${rejectionMotif}) et retourne au Secrétariat.`,
       });
-      logAudit({ companyId, userId: actor.id, userName: actor.fullName, action: 'REJET_ETAPE', entityType: 'MAIL', entityId: mailId, oldValue: mail.mail_status, newValue: 'RETOUR_SECRETARIAT', context: motif });
+      logAudit({ companyId, userId: actor.id, userName: actor.fullName, action: 'REJET_ETAPE', entityType: 'MAIL', entityId: mailId, oldValue: mail.mail_status, newValue: 'RETOUR_SECRETARIAT', context: rejectionMotif });
       return { mailStatus: 'RETOUR_SECRETARIAT', workflowStatus: 'EN_COURS', departmentEmailsTriggered: 0 };
     }
 
     db.prepare(`UPDATE workflow_instances SET status = 'ANNULE', completed_at = datetime('now') WHERE id = ?`).run(instance.id);
     db.prepare(`UPDATE mails SET mail_status = 'REJETE', workflow_status = 'ANNULE', updated_at = datetime('now') WHERE id = ?`).run(mailId);
-    logAudit({ companyId, userId: actor.id, userName: actor.fullName, action: 'REJET_WORKFLOW', entityType: 'MAIL', entityId: mailId, oldValue: mail.mail_status, newValue: 'REJETE', context: motif });
+    logAudit({ companyId, userId: actor.id, userName: actor.fullName, action: 'REJET_WORKFLOW', entityType: 'MAIL', entityId: mailId, oldValue: mail.mail_status, newValue: 'REJETE', context: rejectionMotif });
     return { mailStatus: 'REJETE', workflowStatus: 'ANNULE', departmentEmailsTriggered: 0 };
   }
 

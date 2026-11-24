@@ -271,6 +271,7 @@ export interface MailActionLockInfo {
   canUploadDocument: boolean;
   canDispatchOrArchive: boolean;
   requiresPresidentSignature: boolean;
+  canSign?: boolean;
   activeDelegation?: {
     id: string;
     delegatorName: string;

@@ -298,19 +298,29 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
     setFeedback('');
     setError('');
     try {
+      if (decision === 'REJETER') {
+        if (!decisionNote || !decisionNote.trim()) {
+          setError('Le motif du rejet est obligatoire. Veuillez saisir la raison du rejet ci-dessus avant de continuer.');
+          return;
+        }
+      }
+
       let signatureImage: string | undefined;
       let stampImage: string | undefined;
 
-      if (decision === 'APPROUVER' && data?.actionLock.requiresPresidentSignature) {
+      const userCanSign = (data?.actionLock.canSign || data?.actionLock.requiresPresidentSignature) && user?.role !== 'AGENT';
+
+      if (decision === 'APPROUVER' && userCanSign) {
         if (sigMode === 'DRAW') {
-          if (!hasDrawnSig || !sigCanvasRef.current) {
+          if (hasDrawnSig && sigCanvasRef.current) {
+            signatureImage = sigCanvasRef.current.toDataURL('image/png');
+          } else if (data?.actionLock.requiresPresidentSignature) {
             setError('Veuillez tracer votre signature numérique dans le cadre ou utiliser votre signature enregistrée.');
             return;
           }
-          signatureImage = sigCanvasRef.current.toDataURL('image/png');
         } else {
-          signatureImage = data.currentUserSignAssets?.signatureImage || '';
-          if (!signatureImage) {
+          signatureImage = data?.currentUserSignAssets?.signatureImage || '';
+          if (!signatureImage && data?.actionLock.requiresPresidentSignature) {
             setError('Aucune signature enregistrée dans votre profil. Tracez votre signature ci-dessous.');
             return;
           }
@@ -318,8 +328,8 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
         if (includeStamp) {
           stampImage =
             customStampImg ||
-            data.currentUserSignAssets?.stampImage ||
-            data.currentUserSignAssets?.companyStampImage ||
+            data?.currentUserSignAssets?.stampImage ||
+            data?.currentUserSignAssets?.companyStampImage ||
             '';
         }
       }
@@ -833,14 +843,14 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                   />
 
-                  {/* President Digital Signature & Official Stamp Pad */}
-                  {actionLock.requiresPresidentSignature && (
+                  {/* Digital Signature & Official Stamp Pad for President and Department Heads (Responsables), excluding Agents */}
+                  {(actionLock.requiresPresidentSignature || (actionLock.canSign && user?.role !== 'AGENT')) && (
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-indigo-200 dark:border-indigo-900 space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <PenTool className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
                           <p className="text-xs font-bold text-slate-900 dark:text-white">
-                            Signature numérique &amp; Apposition du cachet officiel (Président)
+                            Signature numérique &amp; Cachet officiel ({user?.role === 'PRESIDENT' ? 'Président' : 'Responsable de service'})
                           </p>
                         </div>
                         <button
@@ -1003,7 +1013,9 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                               ? actionLock.activeDelegation
                                 ? 'Signer par délégation du Président & Approuver'
                                 : 'Signer numériquement, apposer le cachet & Approuver'
-                              : 'Valider / Transmettre'}
+                              : user?.role === 'RESPONSABLE'
+                                ? 'Signer / Valider & Transmettre'
+                                : 'Valider / Transmettre'}
                           </button>
                         )}
                         {actionLock.allowedActions.includes('DEMANDER_CORRECTION') && (
