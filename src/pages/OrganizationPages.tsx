@@ -504,7 +504,7 @@ export function UsersPage() {
 
       {/* VUE 1 : ORGANIGRAMME DYNAMIQUE */}
       {activeTab === 'organigram' && (
-        <OrganigramView users={users} services={services} onEditUser={handleOpenEdit} />
+        <OrganigramView users={users} services={services} onEditUser={handleOpenEdit} onReload={loadData} />
       )}
 
       {/* VUE 2 : LISTE DES COLLABORATEURS */}
@@ -1066,12 +1066,15 @@ function OrganigramView({
   users,
   services,
   onEditUser,
+  onReload,
 }: {
   users: UserRow[];
   services: ServiceItem[];
   onEditUser: (u: UserRow) => void;
+  onReload?: () => Promise<void>;
 }) {
   const [viewMode, setViewMode] = useState<'hierarchy' | 'departments'>('departments');
+  const [changingManagerServiceId, setChangingManagerServiceId] = useState<string | null>(null);
 
   // Indexer les collaborateurs par supérieur direct
   const collaboratorsBySuperior = useMemo(() => {
@@ -1125,6 +1128,19 @@ function OrganigramView({
     ADMIN: { label: 'Admin', bg: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300' },
     AGENT: { label: 'Agent', bg: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300' },
     SUPER_ADMIN: { label: 'SuperAdmin', bg: 'bg-red-100 text-red-800' },
+  };
+
+  const handleAssignManager = async (serviceId: string, managerUserId: string) => {
+    try {
+      await apiFetch(`/api/services/${serviceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ managerUserId }),
+      });
+      setChangingManagerServiceId(null);
+      if (onReload) await onReload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erreur lors de la désignation du responsable.');
+    }
   };
 
   return (
@@ -1199,10 +1215,41 @@ function OrganigramView({
 
                   {/* Responsable de service */}
                   <div className="mt-3.5 mb-2">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
-                      Responsable / Supérieur
-                    </p>
-                    {manager ? (
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                        Responsable / Supérieur
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setChangingManagerServiceId(changingManagerServiceId === svc.id ? null : svc.id)}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {changingManagerServiceId === svc.id ? 'Fermer' : manager ? 'Changer' : '+ Désigner'}
+                      </button>
+                    </div>
+
+                    {changingManagerServiceId === svc.id ? (
+                      <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 space-y-2 text-xs">
+                        <label className="block font-bold text-slate-700 dark:text-slate-300">
+                          Choisir le responsable de « {svc.name} » :
+                        </label>
+                        <select
+                          defaultValue={manager?.id || ''}
+                          onChange={(e) => handleAssignManager(svc.id, e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
+                        >
+                          <option value="">-- Aucun responsable --</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.full_name} ({u.job_title || u.role})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500">
+                          La sélection s'enregistre immédiatement et le désigne comme supérieur du service.
+                        </p>
+                      </div>
+                    ) : manager ? (
                       <div
                         onClick={() => onEditUser(manager)}
                         className={`cursor-pointer p-2.5 rounded-xl border flex items-center gap-2.5 transition-all hover:scale-[1.01] ${roleColors[manager.role]}`}
@@ -1219,19 +1266,14 @@ function OrganigramView({
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-xs">
+                      <div
+                        onClick={() => setChangingManagerServiceId(svc.id)}
+                        className="cursor-pointer flex items-center justify-between p-2.5 rounded-xl border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20 text-xs hover:bg-blue-50 transition-colors"
+                      >
                         <span className="text-slate-400 italic">Aucun responsable</span>
-                        <a
-                          href="#services"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            window.location.hash = 'services';
-                            window.location.reload();
-                          }}
-                          className="font-bold text-blue-600 hover:underline"
-                        >
-                          Désigner dans Services →
-                        </a>
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          + Cliquez pour désigner
+                        </span>
                       </div>
                     )}
                   </div>
