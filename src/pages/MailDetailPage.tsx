@@ -32,6 +32,8 @@ import { PriorityLabel, StatusLabel } from '../components/common/StatusBadge.tsx
 import { useAuth } from '../context/AuthContext.tsx';
 import type {
   CircuitItem,
+  CircuitStepConfig,
+  CircuitTemplateItem,
   MailActionLockInfo,
   MailItem,
   MailSignatureItem,
@@ -115,14 +117,21 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [data, setData] = useState<MailDetailResponse | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [circuits, setCircuits] = useState<CircuitItem[]>([]);
+  const [templates, setTemplates] = useState<CircuitTemplateItem[]>([]);
   const [users, setUsers] = useState<Array<{ id: string; full_name: string; role: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
 
-  // Action inputs
+  // Orientation & Circuit type inputs
+  const [orientMode, setOrientMode] = useState<'CIRCUIT' | 'TEMPLATE' | 'CUSTOM'>('CIRCUIT');
+  const [circuitTypeChoice, setCircuitTypeChoice] = useState<'SEQUENTIEL' | 'PARALLELE' | 'MIXTE'>('SEQUENTIEL');
   const [orientServiceId, setOrientServiceId] = useState('');
   const [orientCircuitId, setOrientCircuitId] = useState('');
+  const [orientTemplateId, setOrientTemplateId] = useState('');
+  const [parallelRuleChoice, setParallelRuleChoice] = useState<'ALL' | 'MIN_COUNT' | 'CONSULTATIVE'>('ALL');
+  const [parallelMinApprovals, setParallelMinApprovals] = useState(2);
+  const [selectedParallelUserIds, setSelectedParallelUserIds] = useState<string[]>([]);
   const [assignAgentId, setAssignAgentId] = useState('');
   const [assignDueDate, setAssignDueDate] = useState('');
   const [assignInstructions, setAssignInstructions] = useState('');
@@ -159,15 +168,17 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [detail, svcRes, cirRes, usrRes] = await Promise.all([
+      const [detail, svcRes, cirRes, usrRes, tmplRes] = await Promise.all([
         apiFetch<MailDetailResponse>(`/api/mails/${mailId}`),
         apiFetch<{ services: ServiceItem[] }>('/api/services'),
         apiFetch<{ circuits: CircuitItem[] }>('/api/circuits'),
         apiFetch<{ users: Array<{ id: string; full_name: string; role: string }> }>('/api/users'),
+        apiFetch<{ templates: CircuitTemplateItem[] }>('/api/circuit-templates').catch(() => ({ templates: [] })),
       ]);
       setData(detail);
       setServices(svcRes.services);
       setCircuits(cirRes.circuits);
+      setTemplates(tmplRes.templates || []);
       setUsers(usrRes.users);
       setOrientServiceId(detail.mail.current_service_id || '');
       setOrientCircuitId(detail.mail.circuit_id || cirRes.circuits.find((c) => c.mail_direction === detail.mail.direction)?.id || '');
@@ -251,18 +262,95 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
     setFeedback('');
     setError('');
     try {
+      let customStepsPayload: any = undefined;
+
+      if (orientMode === 'CUSTOM') {
+        if (circuitTypeChoice === 'PARALLELE') {
+          if (selectedParallelUserIds.length === 0) {
+            setError('Veuillez sélectionner au moins un intervenant pour le circuit parallèle.');
+            return;
+          }
+          const targets = selectedParallelUserIds.map((uid) => {
+            const u = users.find((x) => x.id === uid);
+            return {
+              userId: uid,
+              userName: u?.full_name || 'Utilisateur',
+              userRole: u?.role,
+              isRequired: parallelRuleChoice !== 'CONSULTATIVE',
+            };
+          });
+          customStepsPayload = [
+            {
+              name: 'Consultation Parallèle des Services',
+              mode: 'PARALLEL',
+              parallelRule: parallelRuleChoice,
+              minApprovals: parallelMinApprovals,
+              parallelTargets: targets,
+              slaHours: 48,
+            },
+          ];
+        } else if (circuitTypeChoice === 'MIXTE') {
+          const targets = selectedParallelUserIds.map((uid) => {
+            const u = users.find((x) => x.id === uid);
+            return {
+              userId: uid,
+              userName: u?.full_name || 'Utilisateur',
+              userRole: u?.role,
+              isRequired: true,
+            };
+          });
+          customStepsPayload = [
+            {
+              name: 'Examen initial & Synthèse',
+              mode: 'SEQUENTIAL',
+              targetRole: 'RESPONSABLE',
+              targetServiceId: orientServiceId || null,
+              slaHours: 24,
+            },
+            {
+              name: 'Consultation & Avis des Directions',
+              mode: 'PARALLEL',
+              parallelRule: parallelRuleChoice,
+              minApprovals: parallelMinApprovals,
+              parallelTargets: targets,
+              slaHours: 48,
+            },
+            {
+              name: 'Validation finale Direction Générale / Présidence',
+              mode: 'SEQUENTIAL',
+              targetRole: 'PRESIDENT',
+              slaHours: 24,
+            },
+          ];
+        } else {
+          // Séquentiel par défaut
+          customStepsPayload = [
+            {
+              name: 'Traitement Service Compétent',
+              mode: 'SEQUENTIAL',
+              targetRole: 'RESPONSABLE',
+              targetServiceId: orientServiceId || null,
+              slaHours: 48,
+            },
+          ];
+        }
+      }
+
       const res = await apiFetch<{ departmentEmailsTriggered: number }>(`/api/mails/${mailId}/orient`, {
         method: 'POST',
         body: JSON.stringify({
-          serviceId: orientServiceId,
-          circuitId: orientCircuitId,
+          serviceId: orientServiceId || undefined,
+          circuitId: orientMode === 'CIRCUIT' ? orientCircuitId : undefined,
+          templateId: orientMode === 'TEMPLATE' ? orientTemplateId : undefined,
+          circuitType: circuitTypeChoice,
+          customSteps: customStepsPayload,
           observations: decisionNote || 'Orientation effectuée par le Secrétariat.',
         }),
       });
       setFeedback(
         res.departmentEmailsTriggered > 0
           ? 'Courrier orienté et e-mail automatique envoyé au chef de département. Le dossier est maintenant transmis.'
-          : 'Courrier orienté et circuit mis à jour. Le dossier est maintenant transmis.'
+          : 'Courrier orienté et circuit lancé avec succès. Le dossier est maintenant transmis.'
       );
       setDecisionNote('');
       await loadAll();
@@ -707,40 +795,244 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
 
               {/* Orientation by Secretariat */}
               {actionLock.canOrient && (
-                <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
-                  <p className="text-xs font-semibold">Orientation Secrétariat</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select
-                      value={orientServiceId}
-                      onChange={(e) => setOrientServiceId(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
-                    >
-                      <option value="">Service destinataire...</option>
-                      {services.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={orientCircuitId}
-                      onChange={(e) => setOrientCircuitId(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
-                    >
-                      <option value="">Circuit administratif...</option>
-                      {circuits.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/60 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        Orientation Secrétariat &amp; Choix du Circuit
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Choisissez le mode de traitement (Séquentiel, Parallèle ou Mixte) ou appliquez un modèle enregistré.
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Mode Selector */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOrientMode('CUSTOM')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-center ${
+                        orientMode === 'CUSTOM'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      ⚡ Circuit sur-mesure
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrientMode('CIRCUIT')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-center ${
+                        orientMode === 'CIRCUIT'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      📁 Circuit Prédéfini
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrientMode('TEMPLATE')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-center ${
+                        orientMode === 'TEMPLATE'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      ⭐ Modèle Réutilisable
+                    </button>
+                  </div>
+
+                  {/* Cas 1 : Circuit sur-mesure (Séquentiel, Parallèle, Mixte) */}
+                  {orientMode === 'CUSTOM' && (
+                    <div className="p-3.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                          Type d'architecture du circuit :
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'SEQUENTIEL', label: '1. Séquentiel', desc: 'Ordre linéaire successif' },
+                            { id: 'PARALLELE', label: '2. Parallèle', desc: 'Simultané multi-destinataires' },
+                            { id: 'MIXTE', label: '3. Mixte', desc: 'Séquentiel + Parallèle combinés' },
+                          ].map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => setCircuitTypeChoice(t.id as any)}
+                              className={`p-2 rounded-lg border text-left transition-all ${
+                                circuitTypeChoice === t.id
+                                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300'
+                                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                              }`}
+                            >
+                              <p className="font-bold">{t.label}</p>
+                              <p className="text-[10px] text-slate-500">{t.desc}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Service de rattachement */}
+                      <div>
+                        <label className="font-semibold block mb-1">Service instructeur principal :</label>
+                        <select
+                          value={orientServiceId}
+                          onChange={(e) => setOrientServiceId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                        >
+                          <option value="">Sélectionner le service destinataire...</option>
+                          {services.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Options supplémentaires pour Parallèle ou Mixte */}
+                      {(circuitTypeChoice === 'PARALLELE' || circuitTypeChoice === 'MIXTE') && (
+                        <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div>
+                            <label className="font-bold block mb-1">
+                              Règle de clôture du groupe parallèle :
+                            </label>
+                            <select
+                              value={parallelRuleChoice}
+                              onChange={(e) => setParallelRuleChoice(e.target.value as any)}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                            >
+                              <option value="ALL">Option A — Tous les avis obligatoires</option>
+                              <option value="MIN_COUNT">Option B — Nombre minimum d'avis</option>
+                              <option value="CONSULTATIVE">Option C — Avis consultatifs (non bloquant)</option>
+                            </select>
+                          </div>
+
+                          {parallelRuleChoice === 'MIN_COUNT' && (
+                            <div>
+                              <label className="font-semibold block mb-1">Nombre minimum d'avis requis :</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={Math.max(1, selectedParallelUserIds.length)}
+                                value={parallelMinApprovals}
+                                onChange={(e) => setParallelMinApprovals(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
+                              />
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="font-semibold block mb-1">
+                              Destinataires intervenant en parallèle ({selectedParallelUserIds.length} sélectionné(s)) :
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                              {users.map((u) => {
+                                const isChecked = selectedParallelUserIds.includes(u.id);
+                                return (
+                                  <label
+                                    key={u.id}
+                                    className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-xs ${
+                                      isChecked ? 'bg-blue-50 dark:bg-blue-950/40 font-bold' : 'hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedParallelUserIds([...selectedParallelUserIds, u.id]);
+                                        } else {
+                                          setSelectedParallelUserIds(selectedParallelUserIds.filter((id) => id !== u.id));
+                                        }
+                                      }}
+                                      className="rounded border-slate-300"
+                                    />
+                                    <span className="truncate">
+                                      {u.full_name} ({u.role})
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Cas 2 : Circuit prédéfini classique */}
+                  {orientMode === 'CIRCUIT' && (
+                    <div className="p-3.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold block mb-1">Service destinataire :</label>
+                          <select
+                            value={orientServiceId}
+                            onChange={(e) => setOrientServiceId(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                          >
+                            <option value="">Sélectionner un service...</option>
+                            {services.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold block mb-1">Circuit administratif existant :</label>
+                          <select
+                            value={orientCircuitId}
+                            onChange={(e) => setOrientCircuitId(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                          >
+                            <option value="">Choisir un circuit...</option>
+                            {circuits.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cas 3 : Modèle réutilisable */}
+                  {orientMode === 'TEMPLATE' && (
+                    <div className="p-3.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div>
+                        <label className="text-[11px] font-semibold block mb-1">Modèle réutilisable enregistré :</label>
+                        <select
+                          value={orientTemplateId}
+                          onChange={(e) => setOrientTemplateId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                        >
+                          <option value="">Sélectionner un modèle...</option>
+                          {templates.map((tmpl) => (
+                            <option key={tmpl.id} value={tmpl.id}>
+                              ⭐ {tmpl.name} ({tmpl.circuit_type})
+                            </option>
+                          ))}
+                        </select>
+                        {templates.length === 0 && (
+                          <p className="text-[11px] text-slate-500 mt-1 italic">
+                            Aucun modèle réutilisable pour l'instant. Vous pourrez en enregistrer un lors de l'archivage d'un courrier.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleOrient}
-                    className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-blue-600 text-white text-xs font-semibold"
+                    className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors shadow-sm flex items-center justify-center gap-2"
                   >
-                    Orienter et transmettre
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Lancer et transmettre le courrier</span>
                   </button>
                 </div>
               )}
