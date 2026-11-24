@@ -1639,7 +1639,7 @@ export function SuperAdminPage() {
                 <span className="truncate">
                   <span className="font-mono font-semibold">{l.action}</span> · {l.user_name} — {l.context}
                 </span>
-                <span className="font-mono text-slate-400 shrink-0">{l.created_at.slice(0, 16)}</span>
+                <span className="font-mono text-slate-400 shrink-0">{(l.created_at || '').slice(0, 16)}</span>
               </div>
             ))}
           </div>
