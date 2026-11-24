@@ -596,7 +596,7 @@ function checkHierarchyLoop(candidateUserId: string, targetSuperiorId: string, c
   return false;
 }
 
-adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
   const actor = req.user!;
   const companyId = actor.companyId!;
   const { 
