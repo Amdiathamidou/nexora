@@ -778,9 +778,26 @@ export function seedExempleCompanyEnvironment(): void {
     `).run(companyId);
   }
 
-  // 1. Services & Directions
+  // 1. Administrateur d'abord (master@koracourrier.africa)
+  const adminId = 'usr_45707827-8eba-41b1-8a53-6d02065e496a';
+  const adminUser = db.prepare('SELECT id FROM users WHERE id = ? OR LOWER(email) = LOWER(?)').get(adminId, 'master@koracourrier.africa') as { id: string } | undefined;
+  if (!adminUser) {
+    db.prepare(`
+      INSERT INTO users (
+        id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, is_activated,
+        permissions_json, permissions_audit_json, created_at
+      ) VALUES (
+        ?, ?, 'AMDIATH AMIDOU', 'Sécretaire Administratif', 'master@koracourrier.africa', '+229 0159659396',
+        ?, 'ADMIN', 1, 1,
+        '{"can_manage_users":true,"can_manage_circuits":true,"can_view_all_services":true,"can_view_confidential":true,"can_export_reports":true,"secretariat_receive":true,"secretariat_register":true,"secretariat_ai_analyze":true,"secretariat_orient":true,"secretariat_final_control":true,"secretariat_dispatch":true,"secretariat_archive":true}',
+        '{}', '2026-11-23 23:14:32'
+      )
+    `).run(adminId, companyId, adminPassHash);
+  }
+
+  // 2. Services & Directions
   const servicesData = [
-    { id: 'svc_sec_' + companyId, name: 'Secrétariat', desc: 'Réception, numérisation IA, orientation, contrôle final et expédition.', isSec: 1, type: 'SERVICE', managerId: 'usr_45707827-8eba-41b1-8a53-6d02065e496a' },
+    { id: 'svc_sec_' + companyId, name: 'Secrétariat', desc: 'Réception, numérisation IA, orientation, contrôle final et expédition.', isSec: 1, type: 'SERVICE', managerId: adminId },
     { id: 'svc_dg_' + companyId, name: 'Direction générale', desc: 'Coordination opérationnelle et arbitrages de direction.', isSec: 0, type: 'SERVICE', managerId: null },
     { id: 'svc_rh_' + companyId, name: 'Ressources humaines', desc: 'Gestion administrative du personnel et recrutements.', isSec: 0, type: 'SERVICE', managerId: null },
     { id: 'svc_fin_' + companyId, name: 'Direction financière', desc: 'Facturation, engagements budgétaires et trésorerie.', isSec: 0, type: 'SERVICE', managerId: null },
@@ -797,27 +814,11 @@ export function seedExempleCompanyEnvironment(): void {
     }
   }
 
-  // 2. Administrateur (master@koracourrier.africa)
-  const adminId = 'usr_45707827-8eba-41b1-8a53-6d02065e496a';
-  const adminUser = db.prepare('SELECT id FROM users WHERE id = ? OR LOWER(email) = LOWER(?)').get(adminId, 'master@koracourrier.africa') as { id: string } | undefined;
-  if (!adminUser) {
-    db.prepare(`
-      INSERT INTO users (
-        id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, is_activated,
-        permissions_json, permissions_audit_json, created_at
-      ) VALUES (
-        ?, ?, 'AMDIATH AMIDOU', 'Sécretaire Administratif', 'master@koracourrier.africa', '+229 0159659396',
-        ?, 'ADMIN', 1, 1,
-        '{"can_manage_users":true,"can_manage_circuits":true,"can_view_all_services":true,"can_view_confidential":true,"can_export_reports":true,"secretariat_receive":true,"secretariat_register":true,"secretariat_ai_analyze":true,"secretariat_orient":true,"secretariat_final_control":true,"secretariat_dispatch":true,"secretariat_archive":true}',
-        '{}', '2026-11-23 23:14:32'
-      )
-    `).run(adminId, companyId, adminPassHash);
-
-    db.prepare(`
-      INSERT OR IGNORE INTO user_services (user_id, service_id, company_id)
-      VALUES (?, ?, ?)
-    `).run(adminId, 'svc_sec_' + companyId, companyId);
-  }
+  // Associer l'admin à son service Secrétariat
+  db.prepare(`
+    INSERT OR IGNORE INTO user_services (user_id, service_id, company_id)
+    VALUES (?, ?, ?)
+  `).run(adminId, 'svc_sec_' + companyId, companyId);
 
   // 3. Président (amdiathmohamed414@gmail.com)
   const presId = 'usr_ab0eeb08-b436-42f3-b92b-ac41d2eca99d';
