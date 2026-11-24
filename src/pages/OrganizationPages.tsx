@@ -1054,7 +1054,7 @@ export function UsersPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// COMPOSANT ORGANIGRAMME DYNAMIQUE ET VISUEL
+// COMPOSANT ORGANIGRAMME DYNAMIQUE ET VISUEL (Départements & Hiérarchie)
 // ════════════════════════════════════════════════════════════════════
 function OrganigramView({
   users,
@@ -1065,64 +1065,214 @@ function OrganigramView({
   services: ServiceItem[];
   onEditUser: (u: UserRow) => void;
 }) {
+  const [viewMode, setViewMode] = useState<'hierarchy' | 'departments'>('departments');
+
   // Indexer les collaborateurs par supérieur direct
   const collaboratorsBySuperior = useMemo(() => {
     const map = new Map<string, UserRow[]>();
     for (const u of users) {
-      const supId = u.superior_user_id || 'ROOT';
-      if (!map.has(supId)) map.set(supId, []);
-      map.get(supId)!.push(u);
+      if (u.superior_user_id) {
+        if (!map.has(u.superior_user_id)) map.set(u.superior_user_id, []);
+        map.get(u.superior_user_id)!.push(u);
+      }
     }
     return map;
   }, [users]);
 
-  // Les utilisateurs racines sont ceux sans supérieur direct (ou le Président / Directeurs Généraux)
+  // Les utilisateurs racines
   const rootUsers = useMemo(() => {
-    // Si un président existe, il est la racine absolue
-    const president = users.find((u) => u.role === 'PRESIDENT');
-    if (president) return [president];
-    // Sinon, tous ceux qui n'ont pas de supérieur direct
+    // Tous ceux qui n'ont pas de supérieur direct défini
     const roots = users.filter((u) => !u.superior_user_id);
-    return roots.length > 0 ? roots : users.slice(0, 1);
+    return roots.length > 0 ? roots : users;
   }, [users]);
+
+  // Grouper les collaborateurs par département / service
+  const usersByService = useMemo(() => {
+    const map = new Map<string, UserRow[]>();
+    for (const s of services) {
+      map.set(s.id, []);
+    }
+    map.set('UNASSIGNED', []);
+
+    for (const u of users) {
+      const sId = u.service_id || u.department_id;
+      if (sId && map.has(sId)) {
+        map.get(sId)!.push(u);
+      } else {
+        map.get('UNASSIGNED')!.push(u);
+      }
+    }
+    return map;
+  }, [users, services]);
+
+  const roleColors: Record<string, string> = {
+    PRESIDENT: 'border-amber-400 bg-amber-50/80 dark:bg-amber-950/40 text-amber-950 dark:text-amber-200 shadow-sm',
+    RESPONSABLE: 'border-blue-400 bg-blue-50/80 dark:bg-blue-950/40 text-blue-950 dark:text-blue-200 shadow-sm',
+    ADMIN: 'border-purple-400 bg-purple-50/80 dark:bg-purple-950/40 text-purple-950 dark:text-purple-200 shadow-sm',
+    AGENT: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm',
+    SUPER_ADMIN: 'border-red-400 bg-red-50 text-red-900',
+  };
+
+  const roleBadges: Record<string, { label: string; bg: string }> = {
+    PRESIDENT: { label: 'Président', bg: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' },
+    RESPONSABLE: { label: 'Responsable', bg: 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300' },
+    ADMIN: { label: 'Admin', bg: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300' },
+    AGENT: { label: 'Agent', bg: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300' },
+    SUPER_ADMIN: { label: 'SuperAdmin', bg: 'bg-red-100 text-red-800' },
+  };
 
   return (
     <div className="space-y-6">
       <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Network className="w-4 h-4 text-blue-600" />
-            <span>Arborescence de l’Organigramme d’Entreprise</span>
+            <Network className="w-5 h-5 text-blue-600" />
+            <span>Organigramme de l’Organisation</span>
           </h2>
-          <p className="text-xs text-slate-500">
-            Structure hiérarchique dynamique. Cliquez sur un collaborateur pour modifier ses rattachements ou ses permissions.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Visualisez la structure des services et les relations hiérarchiques de vos collaborateurs.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Président</span>
-          <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Responsable</span>
-          <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Agent</span>
-          <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-purple-600" /> Admin</span>
+
+        {/* Boutons de bascule de vue */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setViewMode('departments')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                viewMode === 'departments'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Vue par Services &amp; Directions
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('hierarchy')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                viewMode === 'hierarchy'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Vue Arborescence Hiérarchique
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-x-auto min-h-[400px]">
-        {rootUsers.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-12">Aucun collaborateur enregistré dans l'organigramme.</p>
-        ) : (
-          <div className="space-y-6">
-            {rootUsers.map((root) => (
-              <OrganigramNode
-                key={root.id}
-                user={root}
-                collaboratorsBySuperior={collaboratorsBySuperior}
-                onEditUser={onEditUser}
-                level={0}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ── 1. VUE PAR SERVICES & DIRECTIONS ── */}
+      {viewMode === 'departments' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {services.map((svc) => {
+            const members = usersByService.get(svc.id) || [];
+            const manager = users.find((u) => u.id === svc.manager_user_id);
+            return (
+              <div
+                key={svc.id}
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm flex flex-col justify-between space-y-4"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-slate-900 dark:text-white">{svc.name}</h3>
+                        {svc.is_secretariat === 1 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold">
+                            Secrétariat
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {svc.type || 'SERVICE'} · {members.length} collaborateur(s)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Responsable de service */}
+                  <div className="mt-3.5 mb-2">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
+                      Responsable / Supérieur
+                    </p>
+                    {manager ? (
+                      <div
+                        onClick={() => onEditUser(manager)}
+                        className={`cursor-pointer p-2.5 rounded-xl border flex items-center gap-2.5 transition-all hover:scale-[1.01] ${roleColors[manager.role]}`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                          {manager.full_name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-xs truncate">{manager.full_name}</p>
+                          <p className="text-[10px] opacity-75 truncate">{manager.job_title || 'Responsable'}</p>
+                        </div>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${roleBadges[manager.role]?.bg}`}>
+                          {roleBadges[manager.role]?.label || manager.role}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center">
+                        Aucun responsable désigné
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Collaborateurs et agents du service */}
+                  <div className="mt-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
+                      Collaborateurs du service ({members.length})
+                    </p>
+                    {members.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2 text-center">Aucun collaborateur rattaché</p>
+                    ) : (
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {members.map((u) => (
+                          <div
+                            key={u.id}
+                            onClick={() => onEditUser(u)}
+                            className="cursor-pointer p-2 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/60 dark:bg-slate-800/40 flex items-center justify-between gap-2 text-xs transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-slate-900 dark:text-white truncate">{u.full_name}</p>
+                              <p className="text-[10px] text-slate-500 truncate">{u.job_title || u.role}</p>
+                            </div>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${roleBadges[u.role]?.bg}`}>
+                              {roleBadges[u.role]?.label || u.role}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 2. VUE ARBORESCENCE HIÉRARCHIQUE ── */}
+      {viewMode === 'hierarchy' && (
+        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-x-auto min-h-[400px]">
+          {rootUsers.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-12">Aucun collaborateur enregistré dans l'organigramme.</p>
+          ) : (
+            <div className="space-y-6">
+              {rootUsers.map((root) => (
+                <OrganigramNode
+                  key={root.id}
+                  user={root}
+                  collaboratorsBySuperior={collaboratorsBySuperior}
+                  onEditUser={onEditUser}
+                  level={0}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

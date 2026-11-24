@@ -699,7 +699,7 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
   const companyName = company?.legal_name || 'Votre entreprise';
   const rawEnvUrl = process.env.APP_URL?.trim();
-  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && !rawEnvUrl.includes('localhost') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
+  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
   const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
   const baseUrl = isValidEnvUrl 
     ? rawEnvUrl.replace(/\/$/, '') 
@@ -762,7 +762,7 @@ adminRoutes.post('/users/:id/resend-invitation', requireAuth, requireCompanyScop
   const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
   const companyName = company?.legal_name || 'Votre entreprise';
   const rawEnvUrl = process.env.APP_URL?.trim();
-  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && !rawEnvUrl.includes('localhost') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
+  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
   const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
   const baseUrl = isValidEnvUrl
     ? rawEnvUrl.replace(/\/$/, '')
