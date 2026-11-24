@@ -124,11 +124,13 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [feedback, setFeedback] = useState('');
 
   // Orientation & Circuit type inputs
-  const [orientMode, setOrientMode] = useState<'CIRCUIT' | 'TEMPLATE' | 'CUSTOM'>('CIRCUIT');
+  const [orientMode, setOrientMode] = useState<'CUSTOM' | 'CIRCUIT' | 'TEMPLATE'>('CUSTOM');
   const [circuitTypeChoice, setCircuitTypeChoice] = useState<'SEQUENTIEL' | 'PARALLELE' | 'MIXTE'>('SEQUENTIEL');
   const [orientServiceId, setOrientServiceId] = useState('');
+  const [orientTargetUserId, setOrientTargetUserId] = useState('');
   const [orientCircuitId, setOrientCircuitId] = useState('');
   const [orientTemplateId, setOrientTemplateId] = useState('');
+  const [orientInstructions, setOrientInstructions] = useState('');
   const [parallelRuleChoice, setParallelRuleChoice] = useState<'ALL' | 'MIN_COUNT' | 'CONSULTATIVE'>('ALL');
   const [parallelMinApprovals, setParallelMinApprovals] = useState(2);
   const [selectedParallelUserIds, setSelectedParallelUserIds] = useState<string[]>([]);
@@ -324,12 +326,15 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           ];
         } else {
           // Séquentiel par défaut
+          const targetU = users.find((x) => x.id === orientTargetUserId);
+          const isPresidentTarget = targetU?.role === 'PRESIDENT';
           customStepsPayload = [
             {
-              name: 'Traitement Service Compétent',
+              name: isPresidentTarget ? 'Examen & Signature du Président' : `Traitement par ${targetU?.full_name || 'le destinataire'}`,
               mode: 'SEQUENTIAL',
-              targetRole: 'RESPONSABLE',
+              targetRole: targetU?.role || 'RESPONSABLE',
               targetServiceId: orientServiceId || null,
+              assignedUserId: orientTargetUserId || null,
               slaHours: 48,
             },
           ];
@@ -340,18 +345,20 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
         method: 'POST',
         body: JSON.stringify({
           serviceId: orientServiceId || undefined,
+          assignedAgentId: orientTargetUserId || undefined,
           circuitId: orientMode === 'CIRCUIT' ? orientCircuitId : undefined,
           templateId: orientMode === 'TEMPLATE' ? orientTemplateId : undefined,
           circuitType: circuitTypeChoice,
           customSteps: customStepsPayload,
-          observations: decisionNote || 'Orientation effectuée par le Secrétariat.',
+          observations: orientInstructions.trim() || decisionNote.trim() || 'Orientation effectuée par le Secrétariat.',
         }),
       });
       setFeedback(
         res.departmentEmailsTriggered > 0
-          ? 'Courrier orienté et e-mail automatique envoyé au chef de département. Le dossier est maintenant transmis.'
+          ? 'Courrier orienté et e-mail automatique envoyé au destinataire. Le dossier est maintenant transmis.'
           : 'Courrier orienté et circuit lancé avec succès. Le dossier est maintenant transmis.'
       );
+      setOrientInstructions('');
       setDecisionNote('');
       await loadAll();
     } catch (e) {
@@ -874,21 +881,54 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                         </div>
                       </div>
 
-                      {/* Service de rattachement */}
-                      <div>
-                        <label className="font-semibold block mb-1">Service instructeur principal :</label>
-                        <select
-                          value={orientServiceId}
-                          onChange={(e) => setOrientServiceId(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
-                        >
-                          <option value="">Sélectionner le service destinataire...</option>
-                          {services.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
+                      {/* Service de rattachement & Destinataire direct */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-semibold block mb-1">Service instructeur :</label>
+                          <select
+                            value={orientServiceId}
+                            onChange={(e) => setOrientServiceId(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                          >
+                            <option value="">Sélectionner le service...</option>
+                            {services.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="font-semibold block mb-1">Destinataire / Intervenant initial :</label>
+                          <select
+                            value={orientTargetUserId}
+                            onChange={(e) => setOrientTargetUserId(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                          >
+                            <option value="">Sélectionner un destinataire...</option>
+                            {['PRESIDENT', 'RESPONSABLE', 'AGENT', 'ADMIN'].map((roleKey) => {
+                              const groupUsers = users.filter((u) => u.role === roleKey);
+                              if (groupUsers.length === 0) return null;
+                              const groupLabel =
+                                roleKey === 'PRESIDENT'
+                                  ? 'Présidence'
+                                  : roleKey === 'RESPONSABLE'
+                                  ? 'Responsables de Direction'
+                                  : roleKey === 'AGENT'
+                                  ? 'Agents'
+                                  : 'Administrateurs';
+                              return (
+                                <optgroup key={roleKey} label={groupLabel}>
+                                  {groupUsers.map((u) => (
+                                    <option key={u.id} value={u.id}>
+                                      {u.full_name} ({u.role})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              );
+                            })}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Options supplémentaires pour Parallèle ou Mixte */}
@@ -1025,6 +1065,20 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       </div>
                     </div>
                   )}
+
+                  {/* Instructions & Annotations du Secrétariat */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Instructions &amp; Annotations de transmission :
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={orientInstructions}
+                      onChange={(e) => setOrientInstructions(e.target.value)}
+                      placeholder="Indiquez ici vos instructions, consignes ou annotations pour le destinataire..."
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
 
                   <button
                     type="button"

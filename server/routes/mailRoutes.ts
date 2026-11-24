@@ -1079,7 +1079,7 @@ mailRoutes.post('/mails/:id/orient', requireAuth, requireCompanyScope, async (re
     emailsTriggered += result.departmentEmailsTriggered;
   }
 
-  if (assignedAgentId && !existingWfi) {
+  if (assignedAgentId) {
     emailsTriggered += await notifyMailAssignedToUser({
       companyId,
       mail,
@@ -1088,18 +1088,26 @@ mailRoutes.post('/mails/:id/orient', requireAuth, requireCompanyScope, async (re
       assignedById: user.id,
       assignedByName: user.fullName,
     });
-  } else if (serviceId && !assignedAgentId) {
+  } else if (serviceId) {
     const svc = db.prepare('SELECT manager_user_id FROM services WHERE id = ? AND company_id = ?').get(serviceId, companyId) as
       | { manager_user_id: string | null }
       | undefined;
-    if (svc?.manager_user_id) {
-      createNotification({
+    
+    // Si c'est le service Présidence ou si le service a pour manager le président
+    let targetUserId = svc?.manager_user_id;
+    if (!targetUserId) {
+      const pres = db.prepare("SELECT id FROM users WHERE company_id = ? AND role = 'PRESIDENT' AND is_active = 1 LIMIT 1").get(companyId) as { id: string } | undefined;
+      targetUserId = pres?.id || null;
+    }
+
+    if (targetUserId) {
+      emailsTriggered += await notifyMailAssignedToUser({
         companyId,
-        userId: svc.manager_user_id,
-        mailId,
-        eventType: 'ORIENTATION_SERVICE',
-        title: `Courrier orienté — ${mail.reference}`,
-        message: `Le courrier "${mail.subject}" a été orienté vers votre service par ${user.fullName}.`,
+        mail,
+        targetUserId: targetUserId,
+        serviceId: serviceId || null,
+        assignedById: user.id,
+        assignedByName: user.fullName,
       });
     }
   }
