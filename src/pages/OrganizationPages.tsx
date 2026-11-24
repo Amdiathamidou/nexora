@@ -553,10 +553,13 @@ export function UsersPage() {
                           }}
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                         >
-                          <option value="AGENT">Agent (Traitement &amp; Tâches)</option>
+                          <option value="AGENT">Agent (Traitement des courriers &amp; Exécution)</option>
                           <option value="RESPONSABLE">Responsable (Chef de service / Supervision)</option>
                           <option value="PRESIDENT">Président (Validation &amp; Décision Exécutive)</option>
-                          <option value="ADMIN">Administrateur (Gestion système &amp; Organisation)</option>
+                          {/* L'admin est unique : option disponible uniquement si l'utilisateur est déjà l'admin */}
+                          {(editingUser.role === 'ADMIN' || !users.some((u) => u.role === 'ADMIN')) && (
+                            <option value="ADMIN">Administrateur (Gestion système &amp; Organisation)</option>
+                          )}
                         </select>
                       </div>
 
@@ -799,10 +802,13 @@ export function UsersPage() {
                       }}
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
                     >
-                      <option value="AGENT">Agent (Traitement &amp; Tâches)</option>
+                      <option value="AGENT">Agent (Traitement des courriers &amp; Exécution)</option>
                       <option value="RESPONSABLE">Responsable (Chef de service / Supervision)</option>
                       <option value="PRESIDENT">Président (Validation &amp; Décision Exécutive)</option>
-                      <option value="ADMIN">Administrateur (Gestion technique &amp; Organisation)</option>
+                      {/* L'admin est unique par entreprise */}
+                      {!users.some((u) => u.role === 'ADMIN') && (
+                        <option value="ADMIN">Administrateur (Gestion technique &amp; Organisation)</option>
+                      )}
                     </select>
                   </div>
 
@@ -1213,9 +1219,20 @@ function OrganigramView({
                         </span>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center">
-                        Aucun responsable désigné
-                      </p>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-xs">
+                        <span className="text-slate-400 italic">Aucun responsable</span>
+                        <a
+                          href="#services"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.location.hash = 'services';
+                            window.location.reload();
+                          }}
+                          className="font-bold text-blue-600 hover:underline"
+                        >
+                          Désigner dans Services →
+                        </a>
+                      </div>
                     )}
                   </div>
 

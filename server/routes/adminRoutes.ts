@@ -619,6 +619,15 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
     }
   }
 
+  // Règle d'unicité de l'Administrateur : une entreprise ne peut avoir qu'un seul Administrateur principal
+  if (role === 'ADMIN') {
+    const existingAdmin = db.prepare("SELECT id, full_name FROM users WHERE company_id = ? AND role = 'ADMIN' AND is_active = 1").get(companyId) as { id: string; full_name: string } | undefined;
+    if (existingAdmin) {
+      res.status(400).json({ error: `Il ne peut y avoir qu'un seul Administrateur par entreprise (${existingAdmin.full_name}). Vous devez désigner les autres collaborateurs comme Responsable ou Agent.` });
+      return;
+    }
+  }
+
   // Vérification de boucle hiérarchique
   if (superiorUserId) {
     const supUser = db.prepare('SELECT id FROM users WHERE id = ? AND company_id = ?').get(superiorUserId, companyId);
@@ -819,6 +828,15 @@ adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('
     const existingPres = db.prepare("SELECT id, full_name FROM users WHERE company_id = ? AND role = 'PRESIDENT' AND id != ? AND is_active = 1").get(companyId, targetId) as { id: string; full_name: string } | undefined;
     if (existingPres) {
       res.status(400).json({ error: `Un Président est déjà désigné (${existingPres.full_name}). Veuillez d'abord modifier son rôle.` });
+      return;
+    }
+  }
+
+  // Règle d'unicité lors du passage au rôle ADMIN
+  if (role === 'ADMIN' && target.role !== 'ADMIN') {
+    const existingAdmin = db.prepare("SELECT id, full_name FROM users WHERE company_id = ? AND role = 'ADMIN' AND id != ? AND is_active = 1").get(companyId, targetId) as { id: string; full_name: string } | undefined;
+    if (existingAdmin) {
+      res.status(400).json({ error: `Il ne peut y avoir qu'un seul Administrateur (${existingAdmin.full_name}).` });
       return;
     }
   }
