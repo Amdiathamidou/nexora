@@ -1057,6 +1057,170 @@ adminRoutes.delete('/services/:id', requireAuth, requireCompanyScope, requireRol
 
 // ==================== CIRCUITS & VERSIONING ====================
 
+// ==================== CIRCUIT TEMPLATES (MODÈLES DE CIRCUITS) ====================
+
+// List circuit templates for the company
+adminRoutes.get('/circuit-templates', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
+  const companyId = req.user!.companyId!;
+  const templates = db
+    .prepare(`
+      SELECT ct.*, u.full_name as created_by_name
+      FROM circuit_templates ct
+      LEFT JOIN users u ON u.id = ct.created_by
+      WHERE ct.company_id = ?
+      ORDER BY ct.created_at DESC
+    `)
+    .all(companyId) as Array<Record<string, unknown>>;
+
+  res.json({
+    templates: templates.map((t) => ({
+      ...t,
+      steps: safeParseJson(String(t.steps_json), []),
+    })),
+  });
+});
+
+// Create a new circuit template
+adminRoutes.post('/circuit-templates', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const companyId = user.companyId!;
+  const { name, description, circuitType, category, mailDirection, steps } = req.body ?? {};
+
+  if (!name || !Array.isArray(steps) || steps.length === 0) {
+    res.status(400).json({ error: 'Nom du modèle et au moins une étape requis.' });
+    return;
+  }
+
+  // Nettoyage de la structure
+  const cleanSteps = steps.map((s, idx) => ({
+    stepOrder: idx + 1,
+    name: s.name || `Étape ${idx + 1}`,
+    stepType: s.stepType || 'AGENT_TREATMENT',
+    mode: s.mode || 'SEQUENTIAL',
+    parallelRule: s.parallelRule || 'ALL',
+    minApprovals: s.minApprovals || 2,
+    targetRole: s.targetRole || null,
+    targetServiceId: s.targetServiceId || null,
+    assignedUserId: s.assignedUserId || null,
+    assignedUserIds: Array.isArray(s.assignedUserIds) ? s.assignedUserIds : [],
+    parallelTargets: Array.isArray(s.parallelTargets) ? s.parallelTargets : [],
+    slaHours: s.slaHours || 24,
+  }));
+
+  const templateId = newId('ctmpl');
+  db.prepare(`
+    INSERT INTO circuit_templates (
+      id, company_id, name, description, circuit_type, category, mail_direction, steps_json, is_active, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(
+    templateId,
+    companyId,
+    String(name).trim(),
+    String(description || '').trim(),
+    circuitType || 'SEQUENTIEL',
+    String(category || 'Général').trim(),
+    mailDirection || 'ENTRANT',
+    JSON.stringify(cleanSteps),
+    user.id
+  );
+
+  logAudit({
+    companyId,
+    userId: user.id,
+    userName: user.fullName,
+    action: 'CREATION_MODELE_CIRCUIT',
+    entityType: 'CIRCUIT_TEMPLATE',
+    entityId: templateId,
+    newValue: { name, circuitType, stepsCount: cleanSteps.length },
+  });
+
+  res.status(201).json({ id: templateId, ok: true });
+});
+
+// Update circuit template
+adminRoutes.put('/circuit-templates/:id', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const companyId = user.companyId!;
+  const templateId = String(req.params.id);
+  const { name, description, circuitType, category, isActive, steps } = req.body ?? {};
+
+  const existing = db.prepare('SELECT id FROM circuit_templates WHERE id = ? AND company_id = ?').get(templateId, companyId);
+  if (!existing) {
+    res.status(404).json({ error: 'Modèle introuvable.' });
+    return;
+  }
+
+  const updateFields: string[] = ["updated_at = datetime('now')"];
+  const params: unknown[] = [];
+
+  if (name !== undefined) {
+    updateFields.push('name = ?');
+    params.push(String(name).trim());
+  }
+  if (description !== undefined) {
+    updateFields.push('description = ?');
+    params.push(String(description).trim());
+  }
+  if (circuitType !== undefined) {
+    updateFields.push('circuit_type = ?');
+    params.push(circuitType);
+  }
+  if (category !== undefined) {
+    updateFields.push('category = ?');
+    params.push(String(category).trim());
+  }
+  if (isActive !== undefined) {
+    updateFields.push('is_active = ?');
+    params.push(isActive ? 1 : 0);
+  }
+  if (Array.isArray(steps)) {
+    updateFields.push('steps_json = ?');
+    params.push(JSON.stringify(steps));
+  }
+
+  params.push(templateId, companyId);
+  db.prepare(`UPDATE circuit_templates SET ${updateFields.join(', ')} WHERE id = ? AND company_id = ?`).run(...params);
+
+  logAudit({
+    companyId,
+    userId: user.id,
+    userName: user.fullName,
+    action: 'MODIFICATION_MODELE_CIRCUIT',
+    entityType: 'CIRCUIT_TEMPLATE',
+    entityId: templateId,
+    newValue: { name, isActive },
+  });
+
+  res.json({ ok: true });
+});
+
+// Delete circuit template
+adminRoutes.delete('/circuit-templates/:id', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const companyId = user.companyId!;
+  const templateId = String(req.params.id);
+
+  const existing = db.prepare('SELECT id, name FROM circuit_templates WHERE id = ? AND company_id = ?').get(templateId, companyId) as { id: string; name: string } | undefined;
+  if (!existing) {
+    res.status(404).json({ error: 'Modèle introuvable.' });
+    return;
+  }
+
+  db.prepare('DELETE FROM circuit_templates WHERE id = ? AND company_id = ?').run(templateId, companyId);
+
+  logAudit({
+    companyId,
+    userId: user.id,
+    userName: user.fullName,
+    action: 'SUPPRESSION_MODELE_CIRCUIT',
+    entityType: 'CIRCUIT_TEMPLATE',
+    entityId: templateId,
+    context: `Suppression du modèle ${existing.name}`,
+  });
+
+  res.json({ ok: true });
+});
+
 adminRoutes.get('/circuits', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
   const companyId = req.user!.companyId!;
   const circuits = db

@@ -109,18 +109,66 @@ export interface ServiceItem {
   active_mail_count?: number;
 }
 
+export type CircuitType = 'SEQUENTIEL' | 'PARALLELE' | 'MIXTE';
+
+export interface ParallelTargetItem {
+  userId: string;
+  userName?: string;
+  role?: UserRole;
+  serviceId?: string | null;
+  serviceName?: string;
+  isRequired?: boolean;
+}
+
 export interface CircuitStepConfig {
   stepOrder: number;
   name: string;
   stepType: string;
   mode: 'SEQUENTIAL' | 'PARALLEL';
-  parallelRule?: 'ALL' | 'ANY_ONE' | 'MIN_COUNT' | 'DESIGNATED_USER';
+  parallelRule?: 'ALL' | 'ANY_ONE' | 'MIN_COUNT' | 'CONSULTATIVE' | 'DESIGNATED_USER';
   minApprovals?: number;
   targetRole?: UserRole;
   targetServiceId?: string | null;
+  assignedUserId?: string | null;
   assignedUserIds?: string[];
+  parallelTargets?: ParallelTargetItem[];
   requiresPresident?: boolean;
   slaHours: number;
+}
+
+export interface CircuitTemplateItem {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string;
+  circuit_type: CircuitType;
+  category: string;
+  mail_direction: MailDirection;
+  steps: CircuitStepConfig[];
+  is_active: number;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParallelInterventionRecord {
+  id: string;
+  workflow_step_id: string;
+  workflow_instance_id: string;
+  mail_id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  service_id: string | null;
+  service_name: string | null;
+  is_required: number;
+  status: 'EN_ATTENTE' | 'AVIS_RENDU' | 'VALIDE' | 'REJETE';
+  decision: string;
+  opinion_text: string;
+  notified_at: string;
+  viewed_at: string | null;
+  completed_at: string | null;
 }
 
 export interface CircuitItem {

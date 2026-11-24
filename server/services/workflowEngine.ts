@@ -20,9 +20,9 @@ export function ensureMandatorySecretariatReturn(
   steps: CircuitStepConfig[],
   secretariatServiceId: string | null
 ): CircuitStepConfig[] {
-  if (direction !== 'ENTRANT') return steps;
+  const normalized = steps.map((s, idx) => ({ ...s, stepOrder: s.stepOrder ?? idx + 1 }));
+  if (direction !== 'ENTRANT') return normalized;
 
-  const normalized = [...steps];
   const hasReturn = normalized.some((s) => s.stepType === 'SECRETARIAT_RETURN');
   const hasDispatch = normalized.some((s) => s.stepType === 'SECRETARIAT_DISPATCH_ARCHIVE');
 
@@ -55,48 +55,74 @@ export function ensureMandatorySecretariatReturn(
 export async function startWorkflowForMail(args: {
   companyId: string;
   mailId: string;
-  circuitId: string;
+  circuitId?: string | null;
+  templateId?: string | null;
+  customSteps?: CircuitStepConfig[];
+  circuitType?: 'SEQUENTIEL' | 'PARALLELE' | 'MIXTE';
   actor: AuthUser;
   targetServiceId?: string | null;
   assignedAgentId?: string | null;
 }): Promise<string> {
-  const { companyId, mailId, circuitId, actor } = args;
+  const { companyId, mailId, circuitId, templateId, customSteps, actor } = args;
 
   const mail = db
     .prepare('SELECT * FROM mails WHERE id = ? AND company_id = ?')
     .get(mailId, companyId) as {
-    id: string;
-    reference: string;
-    direction: MailDirection;
-    subject: string;
-    sender_name: string;
-    sender_org: string;
-    priority: string;
-    due_date: string;
-    current_service_id: string | null;
-    assigned_agent_id: string | null;
-  };
-
-  const circuit = db
-    .prepare('SELECT * FROM circuits WHERE id = ? AND company_id = ?')
-    .get(circuitId, companyId) as { id: string; current_version: number; name: string } | undefined;
-
-  if (!circuit) throw new Error('Circuit administratif introuvable.');
-
-  const versionRow = db
-    .prepare('SELECT * FROM circuit_versions WHERE circuit_id = ? AND version_number = ? AND company_id = ?')
-    .get(circuit.id, circuit.current_version, companyId) as
-    | { id: string; steps_json: string }
-    | undefined;
-
-  if (!versionRow) throw new Error('Version de circuit introuvable.');
+      id: string;
+      reference: string;
+      direction: MailDirection;
+      subject: string;
+      sender_name: string;
+      sender_org: string;
+      priority: string;
+      due_date: string;
+      current_service_id: string | null;
+      assigned_agent_id: string | null;
+    };
 
   const secService = db
     .prepare('SELECT id FROM services WHERE company_id = ? AND is_secretariat = 1 LIMIT 1')
     .get(companyId) as { id: string } | undefined;
 
-  const rawSteps = safeParseJson<CircuitStepConfig[]>(versionRow.steps_json, []);
-  const steps = ensureMandatorySecretariatReturn(mail.direction, rawSteps, secService?.id ?? null);
+  let steps: CircuitStepConfig[] = [];
+  let resolvedCircuitId: string | null = circuitId || null;
+  let resolvedVersionId: string | null = null;
+  let circuitName = 'Circuit personnalisé';
+
+  if (customSteps && customSteps.length > 0) {
+    steps = ensureMandatorySecretariatReturn(mail.direction, customSteps, secService?.id ?? null);
+    circuitName = `Circuit ${args.circuitType || 'sur mesure'} (${mail.reference})`;
+  } else if (templateId) {
+    const tmpl = db
+      .prepare('SELECT * FROM circuit_templates WHERE id = ? AND company_id = ?')
+      .get(templateId, companyId) as { id: string; name: string; steps_json: string } | undefined;
+    if (!tmpl) throw new Error('Modèle de circuit introuvable.');
+    const rawSteps = safeParseJson<CircuitStepConfig[]>(tmpl.steps_json, []);
+    steps = ensureMandatorySecretariatReturn(mail.direction, rawSteps, secService?.id ?? null);
+    circuitName = tmpl.name;
+  } else if (circuitId) {
+    const circuit = db
+      .prepare('SELECT * FROM circuits WHERE id = ? AND company_id = ?')
+      .get(circuitId, companyId) as { id: string; current_version: number; name: string } | undefined;
+
+    if (!circuit) throw new Error('Circuit administratif introuvable.');
+    circuitName = circuit.name;
+    resolvedCircuitId = circuit.id;
+
+    const versionRow = db
+      .prepare('SELECT * FROM circuit_versions WHERE circuit_id = ? AND version_number = ? AND company_id = ?')
+      .get(circuit.id, circuit.current_version, companyId) as
+      | { id: string; steps_json: string }
+      | undefined;
+
+    if (!versionRow) throw new Error('Version de circuit introuvable.');
+    resolvedVersionId = versionRow.id;
+
+    const rawSteps = safeParseJson<CircuitStepConfig[]>(versionRow.steps_json, []);
+    steps = ensureMandatorySecretariatReturn(mail.direction, rawSteps, secService?.id ?? null);
+  } else {
+    throw new Error('Veuillez sélectionner un circuit, un modèle ou définir les étapes de traitement.');
+  }
 
   const instanceId = newId('wfi');
 
@@ -105,7 +131,15 @@ export async function startWorkflowForMail(args: {
       INSERT INTO workflow_instances (
         id, mail_id, company_id, circuit_id, circuit_version_id, steps_snapshot_json, current_step_index, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'EN_COURS')
-    `).run(instanceId, mailId, companyId, circuit.id, versionRow.id, JSON.stringify(steps), 0);
+    `).run(
+      instanceId,
+      mailId,
+      companyId,
+      resolvedCircuitId || 'custom',
+      resolvedVersionId || 'v1',
+      JSON.stringify(steps),
+      0
+    );
 
     for (let i = 0; i < steps.length; i++) {
       const st = steps[i];
@@ -114,9 +148,14 @@ export async function startWorkflowForMail(args: {
 
       // Resolve service & user for step
       let stepServiceId = st.targetServiceId || args.targetServiceId || mail.current_service_id || null;
-      let stepUserId: string | null = null;
+      let stepUserId: string | null = st.assignedUserId || null;
 
-      if (st.stepType === 'SECRETARIAT_RECEPTION' || st.stepType === 'ORIENTATION' || st.stepType === 'SECRETARIAT_RETURN' || st.stepType === 'SECRETARIAT_DISPATCH_ARCHIVE') {
+      if (
+        st.stepType === 'SECRETARIAT_RECEPTION' ||
+        st.stepType === 'ORIENTATION' ||
+        st.stepType === 'SECRETARIAT_RETURN' ||
+        st.stepType === 'SECRETARIAT_DISPATCH_ARCHIVE'
+      ) {
         stepServiceId = secService?.id ?? stepServiceId;
       } else if (st.stepType === 'PRESIDENT_VALIDATION') {
         const pres = db
@@ -124,9 +163,9 @@ export async function startWorkflowForMail(args: {
           .get(companyId) as { id: string } | undefined;
         stepUserId = pres?.id ?? null;
       } else if (st.stepType === 'AGENT_TREATMENT') {
-        stepUserId = args.assignedAgentId || mail.assigned_agent_id || null;
+        stepUserId = stepUserId || args.assignedAgentId || mail.assigned_agent_id || null;
       } else if (st.stepType === 'RESPONSABLE_ASSIGN' || st.stepType === 'RESPONSABLE_REVIEW') {
-        if (stepServiceId) {
+        if (stepServiceId && !stepUserId) {
           const svc = db
             .prepare('SELECT manager_user_id FROM services WHERE id = ? AND company_id = ?')
             .get(stepServiceId, companyId) as { manager_user_id: string | null } | undefined;
@@ -144,55 +183,129 @@ export async function startWorkflowForMail(args: {
         instanceId,
         mailId,
         companyId,
-        st.stepOrder,
-        st.name,
-        st.stepType,
+        st.stepOrder ?? i + 1,
+        st.name || (st as any).title || `Étape ${i + 1}`,
+        st.stepType || (st.mode === 'PARALLEL' ? 'PARALLEL_REVIEW' : 'AGENT_TREATMENT'),
         st.mode,
         isFirst ? 'EN_COURS' : 'EN_ATTENTE',
         stepServiceId,
         stepUserId,
         addHoursIso(st.slaHours || 48)
       );
+
+      // Si c'est une étape PARALLEL avec des cibles définies, créer les entrées d'interventions individuelles
+      if (st.mode === 'PARALLEL') {
+        const parallelTargets = st.parallelTargets || [];
+        const assignedIds = st.assignedUserIds || [];
+        const combinedUserIds = Array.from(new Set([...parallelTargets.map((t) => t.userId), ...assignedIds])).filter(Boolean);
+
+        for (const uid of combinedUserIds) {
+          const targetMeta = parallelTargets.find((t) => t.userId === uid);
+          const uInfo = db
+            .prepare('SELECT id, full_name, role FROM users WHERE id = ? AND company_id = ?')
+            .get(uid, companyId) as { id: string; full_name: string; role: string } | undefined;
+
+          if (uInfo) {
+            const intervId = newId('itv');
+            db.prepare(`
+              INSERT INTO workflow_step_interventions (
+                id, workflow_step_id, workflow_instance_id, mail_id, company_id,
+                user_id, user_name, user_role, service_id, service_name,
+                is_required, status, decision, opinion_text, notified_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EN_ATTENTE', '', '', datetime('now'))
+            `).run(
+              intervId,
+              execId,
+              instanceId,
+              mailId,
+              companyId,
+              uInfo.id,
+              uInfo.full_name,
+              uInfo.role,
+              targetMeta?.serviceId || null,
+              targetMeta?.serviceName || null,
+              targetMeta?.isRequired !== false ? 1 : 0
+            );
+          }
+        }
+      }
     }
 
     db.prepare(`
       UPDATE mails
       SET circuit_id = ?, circuit_version_id = ?, mail_status = 'EN_CIRCUIT', workflow_status = 'EN_COURS', updated_at = datetime('now')
       WHERE id = ? AND company_id = ?
-    `).run(circuit.id, versionRow.id, mailId, companyId);
+    `).run(resolvedCircuitId, resolvedVersionId, mailId, companyId);
   })();
 
-  // Create initial task for step 1 if applicable
+  // Activer et notifier la première étape
   const firstStep = db
     .prepare('SELECT * FROM workflow_step_executions WHERE workflow_instance_id = ? ORDER BY step_order ASC LIMIT 1')
     .get(instanceId) as {
-    id: string;
-    step_name: string;
-    assigned_service_id: string | null;
-    assigned_user_id: string | null;
-    due_at: string;
-  };
+      id: string;
+      step_name: string;
+      mode: string;
+      assigned_service_id: string | null;
+      assigned_user_id: string | null;
+      due_at: string;
+    };
 
   if (firstStep) {
-    const taskId = newId('tsk');
-    db.prepare(`
-      INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
-    `).run(
-      taskId,
-      mailId,
-      companyId,
-      firstStep.id,
-      `${mail.reference} — ${firstStep.step_name}`,
-      `Étape initiale du circuit "${circuit.name}"`,
-      firstStep.assigned_user_id,
-      firstStep.assigned_service_id,
-      mail.priority,
-      firstStep.due_at,
-      actor.id
-    );
+    if (firstStep.mode === 'PARALLEL') {
+      // Notifier TOUS les intervenants de l'étape parallèle simultanément
+      const interventions = db
+        .prepare('SELECT * FROM workflow_step_interventions WHERE workflow_step_id = ?')
+        .all(firstStep.id) as Array<{ user_id: string; service_id: string | null }>;
 
-    if (firstStep.assigned_user_id) {
+      for (const itv of interventions) {
+        const taskId = newId('tsk');
+        db.prepare(`
+          INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
+        `).run(
+          taskId,
+          mailId,
+          companyId,
+          firstStep.id,
+          `${mail.reference} — Consultation parallèle : ${firstStep.step_name}`,
+          `Intervention requise sur l'étape parallèle du circuit "${circuitName}"`,
+          itv.user_id,
+          itv.service_id,
+          mail.priority,
+          firstStep.due_at,
+          actor.id
+        );
+
+        await notifyMailAssignedToUser({
+          companyId,
+          mail,
+          targetUserId: itv.user_id,
+          serviceId: itv.service_id,
+          taskId,
+          assignedById: actor.id,
+          assignedByName: actor.fullName,
+          actionRequired: `Consultation parallèle : ${firstStep.step_name}`,
+        });
+      }
+    } else if (firstStep.assigned_user_id) {
+      const taskId = newId('tsk');
+      db.prepare(`
+        INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
+      `).run(
+        taskId,
+        mailId,
+        companyId,
+        firstStep.id,
+        `${mail.reference} — ${firstStep.step_name}`,
+        `Étape initiale du circuit "${circuitName}"`,
+        firstStep.assigned_user_id,
+        firstStep.assigned_service_id,
+        mail.priority,
+        firstStep.due_at,
+        actor.id
+      );
+
       await notifyMailAssignedToUser({
         companyId,
         mail,
@@ -212,8 +325,8 @@ export async function startWorkflowForMail(args: {
     action: 'DEMARRAGE_WORKFLOW',
     entityType: 'MAIL',
     entityId: mailId,
-    newValue: { circuitName: circuit.name, version: circuit.current_version },
-    context: `Démarrage du circuit ${circuit.name} (v${circuit.current_version})`,
+    newValue: { circuitName, stepsCount: steps.length },
+    context: `Lancement du circuit "${circuitName}" pour ${mail.reference}`,
   });
 
   return instanceId;
@@ -449,28 +562,39 @@ export function computeMailActionLock(args: {
 
     // 1e. Parallel Review step
     if (activeStep.mode === 'PARALLEL' || stepType === 'PARALLEL_REVIEW') {
+      // Vérifier les interventions enregistrées dans workflow_step_interventions
+      const userIntervention = db
+        .prepare('SELECT * FROM workflow_step_interventions WHERE workflow_step_id = ? AND user_id = ?')
+        .get(activeStep.id, user.id) as { id: string; status: string; is_required: number } | undefined;
+
       const approvals = safeParseJson<Array<{ userId: string }>>(activeStep.parallel_approvals_json, []);
-      if (approvals.some((a) => a.userId === user.id)) {
+      const alreadyApproved = approvals.some((a) => a.userId === user.id) || (userIntervention && userIntervention.status !== 'EN_ATTENTE');
+
+      if (alreadyApproved) {
         return lockedResult(
-          'Vous avez déjà enregistré votre décision sur cette étape parallèle. En attente des autres valideurs.',
-          'Validation parallèle en cours'
+          'Vous avez déjà enregistré votre avis / décision sur cette consultation parallèle. En attente des autres intervenants.',
+          'Votre avis est déjà rendu'
         );
       }
+
       const designated = stepCfg?.assignedUserIds || [];
+      const hasIntervention = Boolean(userIntervention);
       const isEligible =
+        hasIntervention ||
         designated.includes(user.id) ||
         (user.role === 'RESPONSABLE' && Boolean(activeStep.assigned_service_id && user.serviceIds.includes(activeStep.assigned_service_id)));
+
       if (!isEligible) {
         return lockedResult(
-          'Cette étape parallèle est attribuée à des valideurs désignés. Lecture seule.',
-          'Valideurs parallèles'
+          'Cette étape parallèle est attribuée à des intervenants ou responsables désignés. Accès en lecture seule.',
+          'Intervenants parallèles'
         );
       }
       return {
         canAct: true,
         lockReason: '',
-        currentHolderLabel: 'Validation parallèle requise',
-        allowedActions: ['APPROUVER', 'DEMANDER_CORRECTION', 'REJETER', 'SUSPENDRE'],
+        currentHolderLabel: 'Consultation parallèle requise (Votre avis)',
+        allowedActions: ['APPROUVER', 'DONNER_AVIS', 'DEMANDER_CORRECTION', 'REJETER', 'SUSPENDRE'],
         canOrient: false,
         canAssignAgent: false,
         canUploadDocument: true,
@@ -486,11 +610,11 @@ export function computeMailActionLock(args: {
       const mailCategory = mail.category || '';
       const applicableDelegation = !isDirectPresident
         ? getApplicableDelegation({
-            companyId,
-            userId: user.id,
-            direction: mailDirection,
-            category: mailCategory,
-          })
+          companyId,
+          userId: user.id,
+          direction: mailDirection,
+          category: mailCategory,
+        })
         : null;
 
       if (!isDirectPresident && !applicableDelegation) {
@@ -514,12 +638,12 @@ export function computeMailActionLock(args: {
         requiresPresidentSignature: true,
         activeDelegation: applicableDelegation
           ? {
-              id: applicableDelegation.id,
-              delegatorName: applicableDelegation.delegatorName,
-              delegateName: applicableDelegation.delegateName,
-              endDate: applicableDelegation.endDate,
-              restrictions: applicableDelegation.restrictions,
-            }
+            id: applicableDelegation.id,
+            delegatorName: applicableDelegation.delegatorName,
+            delegateName: applicableDelegation.delegateName,
+            endDate: applicableDelegation.endDate,
+            restrictions: applicableDelegation.restrictions,
+          }
           : null,
       };
     }
@@ -615,21 +739,21 @@ export async function applyWorkflowDecision(args: {
   const mail = db
     .prepare('SELECT * FROM mails WHERE id = ? AND company_id = ?')
     .get(mailId, companyId) as {
-    id: string;
-    reference: string;
-    direction: MailDirection;
-    category: string;
-    subject: string;
-    sender_name: string;
-    sender_org: string;
-    priority: string;
-    due_date: string;
-    requires_response: number;
-    current_service_id: string | null;
-    assigned_agent_id: string | null;
-    mail_status: string;
-    workflow_status: string;
-  } | undefined;
+      id: string;
+      reference: string;
+      direction: MailDirection;
+      category: string;
+      subject: string;
+      sender_name: string;
+      sender_org: string;
+      priority: string;
+      due_date: string;
+      requires_response: number;
+      current_service_id: string | null;
+      assigned_agent_id: string | null;
+      mail_status: string;
+      workflow_status: string;
+    } | undefined;
 
   if (!mail) throw new Error('Courrier introuvable.');
 
@@ -646,17 +770,17 @@ export async function applyWorkflowDecision(args: {
   const allSteps = db
     .prepare('SELECT * FROM workflow_step_executions WHERE workflow_instance_id = ? ORDER BY step_order ASC')
     .all(instance.id) as Array<{
-    id: string;
-    step_order: number;
-    step_name: string;
-    step_type: string;
-    mode: 'SEQUENTIAL' | 'PARALLEL';
-    status: string;
-    assigned_service_id: string | null;
-    assigned_user_id: string | null;
-    parallel_approvals_json: string;
-    due_at: string;
-  }>;
+      id: string;
+      step_order: number;
+      step_name: string;
+      step_type: string;
+      mode: 'SEQUENTIAL' | 'PARALLEL';
+      status: string;
+      assigned_service_id: string | null;
+      assigned_user_id: string | null;
+      parallel_approvals_json: string;
+      due_at: string;
+    }>;
 
   const currentStep = allSteps[instance.current_step_index] || allSteps.find((s) => s.status === 'EN_COURS');
   if (!currentStep) {
@@ -839,38 +963,111 @@ export async function applyWorkflowDecision(args: {
     return { mailStatus: 'REJETE', workflowStatus: 'ANNULE', departmentEmailsTriggered: 0 };
   }
 
-  // Handle PARALLEL step partial approval
-  if (currentStep.mode === 'PARALLEL' && (decision === 'APPROUVER' || decision === 'TRANSMETTRE')) {
-    const approvals = safeParseJson<Array<{ userId: string; userName: string; at: string }>>(
+  // Handle PARALLEL step partial approval / opinion rendering
+  if (currentStep.mode === 'PARALLEL' && (decision === 'APPROUVER' || decision === 'TRANSMETTRE' || decision === 'DONNER_AVIS')) {
+    // 1. Mettre à jour l'intervention individuelle si elle existe
+    const existingInterv = db
+      .prepare('SELECT id, is_required FROM workflow_step_interventions WHERE workflow_step_id = ? AND user_id = ?')
+      .get(currentStep.id, actor.id) as { id: string; is_required: number } | undefined;
+
+    if (existingInterv) {
+      db.prepare(`
+        UPDATE workflow_step_interventions
+        SET status = 'AVIS_RENDU', decision = ?, opinion_text = ?, completed_at = datetime('now')
+        WHERE id = ?
+      `).run(decision, observations || motif || 'Avis favorable rendu', existingInterv.id);
+    } else {
+      // Créer à la volée si non pré-créé
+      db.prepare(`
+        INSERT INTO workflow_step_interventions (
+          id, workflow_step_id, workflow_instance_id, mail_id, company_id,
+          user_id, user_name, user_role, is_required, status, decision, opinion_text, completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'AVIS_RENDU', ?, ?, datetime('now'))
+      `).run(
+        newId('itv'),
+        currentStep.id,
+        instance.id,
+        mailId,
+        companyId,
+        actor.id,
+        actor.fullName,
+        actor.role,
+        decision,
+        observations || motif || 'Avis favorable rendu'
+      );
+    }
+
+    const approvals = safeParseJson<Array<{ userId: string; userName: string; at: string; decision: string }>>(
       currentStep.parallel_approvals_json,
       []
     );
     if (!approvals.some((a) => a.userId === actor.id)) {
-      approvals.push({ userId: actor.id, userName: actor.fullName, at: new Date().toISOString() });
+      approvals.push({ userId: actor.id, userName: actor.fullName, at: new Date().toISOString(), decision });
     }
     db.prepare(`UPDATE workflow_step_executions SET parallel_approvals_json = ? WHERE id = ?`).run(
       JSON.stringify(approvals),
       currentStep.id
     );
 
-    const rule = stepCfg?.parallelRule || 'ANY_ONE';
-    const requiredCount =
-      rule === 'ALL'
-        ? Math.max(1, stepCfg?.assignedUserIds?.length || 2)
-        : rule === 'MIN_COUNT'
-        ? Math.max(1, stepCfg?.minApprovals || 2)
-        : 1;
+    // Mettre à jour la tâche de l'intervenant
+    db.prepare(`
+      UPDATE tasks SET status = 'TERMINEE', updated_at = datetime('now')
+      WHERE workflow_step_id = ? AND assigned_user_id = ? AND status NOT IN ('TERMINEE', 'ANNULEE')
+    `).run(currentStep.id, actor.id);
 
-    if (approvals.length < requiredCount) {
+    // Calculer les conditions de clôture selon la règle choisie :
+    // Option A: 'ALL' (Tous les avis obligatoires)
+    // Option B: 'MIN_COUNT' (Nombre minimum d'avis, ex: 2 sur 3)
+    // Option C: 'CONSULTATIVE' (Avis consultatifs, ne bloque pas la progression si initiateur ou premier valideur avance)
+    const rule = stepCfg?.parallelRule || 'ALL';
+
+    const allInterventions = db
+      .prepare('SELECT id, is_required, status FROM workflow_step_interventions WHERE workflow_step_id = ?')
+      .all(currentStep.id) as Array<{ id: string; is_required: number; status: string }>;
+
+    let isClosureConditionSatisfied = false;
+
+    if (allInterventions.length > 0) {
+      const requiredInterventions = allInterventions.filter((i) => i.is_required === 1);
+      const completedRequired = requiredInterventions.filter((i) => i.status === 'AVIS_RENDU' || i.status === 'VALIDE');
+      const totalCompleted = allInterventions.filter((i) => i.status === 'AVIS_RENDU' || i.status === 'VALIDE');
+
+      if (rule === 'ALL') {
+        // Tous les avis obligatoires requis
+        isClosureConditionSatisfied = requiredInterventions.length === 0
+          ? totalCompleted.length === allInterventions.length
+          : completedRequired.length >= requiredInterventions.length;
+      } else if (rule === 'MIN_COUNT') {
+        const minReq = Math.max(1, stepCfg?.minApprovals || 2);
+        isClosureConditionSatisfied = totalCompleted.length >= minReq;
+      } else if (rule === 'CONSULTATIVE') {
+        // Consultatif : chaque avis rendu compte, mais au moins 1 avis clôture ou avance le palier
+        isClosureConditionSatisfied = true;
+      } else {
+        // ANY_ONE
+        isClosureConditionSatisfied = totalCompleted.length >= 1;
+      }
+    } else {
+      // Fallback sur le nombre d'approvals
+      const requiredCount =
+        rule === 'ALL'
+          ? Math.max(1, stepCfg?.assignedUserIds?.length || 2)
+          : rule === 'MIN_COUNT'
+            ? Math.max(1, stepCfg?.minApprovals || 2)
+            : 1;
+      isClosureConditionSatisfied = approvals.length >= requiredCount;
+    }
+
+    if (!isClosureConditionSatisfied) {
       logAudit({
         companyId,
         userId: actor.id,
         userName: actor.fullName,
-        action: 'VALIDATION_PARALLELE_PARTIELLE',
+        action: 'AVIS_PARALLELE_ENREGISTRE',
         entityType: 'MAIL',
         entityId: mailId,
-        newValue: { approvals: approvals.length, required: requiredCount },
-        context: observations,
+        newValue: { approvalsCount: approvals.length, rule },
+        context: observations || 'Avis parallèle enregistré, en attente des autres intervenants.',
       });
       return { mailStatus: mail.mail_status, workflowStatus: 'EN_COURS', departmentEmailsTriggered: 0 };
     }
@@ -1007,34 +1204,72 @@ export async function applyWorkflowDecision(args: {
     WHERE id = ?
   `).run(nextMailStatus, nextServiceId, args.targetAgentId ?? null, args.targetAgentId ?? null, nextStep.step_type, mailId);
 
-  const taskId = newId('tsk');
-  db.prepare(`
-    INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
-  `).run(
-    taskId,
-    mailId,
-    companyId,
-    nextStep.id,
-    `${mail.reference} — ${nextStep.step_name}`,
-    observations || `Action requise : ${nextStep.step_name}`,
-    nextUserId,
-    nextServiceId,
-    mail.priority,
-    nextStep.due_at,
-    actor.id
-  );
+  if (nextStep.mode === 'PARALLEL') {
+    // Activer et notifier TOUS les participants de cette étape parallèle
+    const parallelInterventions = db
+      .prepare('SELECT * FROM workflow_step_interventions WHERE workflow_step_id = ?')
+      .all(nextStep.id) as Array<{ user_id: string; service_id: string | null }>;
 
-  if (nextUserId) {
-    departmentEmailsTriggered += await notifyMailAssignedToUser({
-      companyId,
-      mail,
-      targetUserId: nextUserId,
-      serviceId: nextServiceId,
+    for (const itv of parallelInterventions) {
+      const taskId = newId('tsk');
+      db.prepare(`
+        INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
+      `).run(
+        taskId,
+        mailId,
+        companyId,
+        nextStep.id,
+        `${mail.reference} — Consultation parallèle : ${nextStep.step_name}`,
+        observations || `Avis ou décision requis sur : ${nextStep.step_name}`,
+        itv.user_id,
+        itv.service_id,
+        mail.priority,
+        nextStep.due_at,
+        actor.id
+      );
+
+      departmentEmailsTriggered += await notifyMailAssignedToUser({
+        companyId,
+        mail,
+        targetUserId: itv.user_id,
+        serviceId: itv.service_id,
+        taskId,
+        assignedById: actor.id,
+        assignedByName: actor.fullName,
+        actionRequired: `Consultation parallèle : ${nextStep.step_name}`,
+      });
+    }
+  } else {
+    const taskId = newId('tsk');
+    db.prepare(`
+      INSERT INTO tasks (id, mail_id, company_id, workflow_step_id, title, description, assigned_user_id, assigned_service_id, priority, status, due_date, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'A_TRAITER', ?, ?)
+    `).run(
       taskId,
-      assignedById: actor.id,
-      assignedByName: actor.fullName,
-    });
+      mailId,
+      companyId,
+      nextStep.id,
+      `${mail.reference} — ${nextStep.step_name}`,
+      observations || `Action requise : ${nextStep.step_name}`,
+      nextUserId,
+      nextServiceId,
+      mail.priority,
+      nextStep.due_at,
+      actor.id
+    );
+
+    if (nextUserId) {
+      departmentEmailsTriggered += await notifyMailAssignedToUser({
+        companyId,
+        mail,
+        targetUserId: nextUserId,
+        serviceId: nextServiceId,
+        taskId,
+        assignedById: actor.id,
+        assignedByName: actor.fullName,
+      });
+    }
   }
 
   logAudit({

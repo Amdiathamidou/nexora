@@ -84,6 +84,19 @@ interface MailDetailResponse {
   emailLogs: Array<{ id: string; recipient_email: string; recipient_name: string; department_name: string; subject: string; delivery_status: string; created_at: string }>;
   auditLogs: Array<{ id: string; user_name: string; action: string; old_value_json: string; new_value_json: string; context: string; created_at: string }>;
   signatures: MailSignatureItem[];
+  parallelInterventions?: Array<{
+    id: string;
+    workflow_step_id: string;
+    user_id: string;
+    user_full_name: string;
+    user_actual_role: string;
+    service_name: string | null;
+    is_required: number;
+    status: string;
+    decision: string;
+    opinion_text: string;
+    completed_at: string | null;
+  }>;
   actionLock: MailActionLockInfo;
   currentUserSignAssets: {
     signatureImage: string;
@@ -132,7 +145,11 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [docBlobUrls, setDocBlobUrls] = useState<Record<string, string>>({});
   const [docLoadingId, setDocLoadingId] = useState<string | null>(null);
 
-  // Draft editor state
+  // Archive with template modal state
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [saveAsTemplateChoice, setSaveAsTemplateChoice] = useState<'OUI' | 'NON'>('NON');
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateDescription, setNewTemplateDescription] = useState('');
   const [draftHtml, setDraftHtml] = useState('');
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -388,10 +405,26 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   };
 
   const handleArchive = async () => {
+    setShowArchiveModal(true);
+  };
+
+  const confirmArchive = async () => {
     setError('');
+    setShowArchiveModal(false);
     try {
-      await apiFetch(`/api/mails/${mailId}/archive`, { method: 'POST' });
-      setFeedback('Dossier clôturé et archivé définitivement.');
+      const res = await apiFetch<{ ok: boolean; templateId?: string }>(`/api/mails/${mailId}/archive`, {
+        method: 'POST',
+        body: JSON.stringify({
+          saveAsTemplate: saveAsTemplateChoice === 'OUI',
+          templateName: newTemplateName,
+          templateDescription: newTemplateDescription,
+        }),
+      });
+      setFeedback(
+        res.templateId
+          ? `Dossier clôturé et archivé. Le modèle de circuit "${newTemplateName}" a été enregistré avec succès.`
+          : 'Dossier clôturé et archivé définitivement.'
+      );
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur archivage');
@@ -624,9 +657,19 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                   {st.service_name || 'Service'} {st.assigned_user_name ? `· ${st.assigned_user_name}` : ''}
                 </p>
                 {st.mode === 'PARALLEL' && (
-                  <p className="font-mono text-[11px] text-indigo-700 dark:text-indigo-400">
-                    Mode parallèle ({JSON.parse(st.parallel_approvals_json || '[]').length} avis)
-                  </p>
+                  <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <p className="font-mono text-[11px] text-indigo-700 dark:text-indigo-400 font-bold">
+                      Consultation parallèle ({JSON.parse(st.parallel_approvals_json || '[]').length} avis reçus)
+                    </p>
+                    {data.parallelInterventions && data.parallelInterventions.filter((i) => i.workflow_step_id === st.id).map((itv) => (
+                      <div key={itv.id} className="text-[10px] flex items-center justify-between text-slate-600 dark:text-slate-400">
+                        <span>{itv.user_full_name} ({itv.service_name || itv.user_actual_role})</span>
+                        <span className={`font-semibold ${itv.status === 'AVIS_RENDU' || itv.status === 'VALIDE' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {itv.status === 'AVIS_RENDU' ? 'Avis rendu' : itv.status === 'VALIDE' ? 'Validé' : 'En attente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {st.decided_by_name && (
                   <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-700">
@@ -941,6 +984,15 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       </button>
                     ) : (
                       <>
+                        {actionLock.allowedActions.includes('DONNER_AVIS') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDecision('DONNER_AVIS')}
+                            className="px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500"
+                          >
+                            Donner mon avis
+                          </button>
+                        )}
                         {actionLock.allowedActions.includes('APPROUVER') && (
                           <button
                             type="button"
@@ -1502,6 +1554,103 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           </section>
         </div>
       </div>
+
+      {/* MODAL ARCHIVAGE AVEC PROPOSITION DE MODÈLE RÉUTILISABLE */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center gap-2.5 text-blue-600 dark:text-blue-400">
+              <Archive className="w-5 h-5" />
+              <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">
+                Archivage &amp; Clôture du dossier
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Le courrier <strong>{mail.reference}</strong> va être clôturé et archivé définitivement.
+            </p>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+              <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                Souhaitez-vous enregistrer le circuit de traitement de ce courrier comme modèle réutilisable ?
+              </p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-xs cursor-pointer font-medium text-slate-800 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="saveAsTemplate"
+                    value="OUI"
+                    checked={saveAsTemplateChoice === 'OUI'}
+                    onChange={() => setSaveAsTemplateChoice('OUI')}
+                  />
+                  <span>OUI (Créer un modèle)</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer font-medium text-slate-800 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="saveAsTemplate"
+                    value="NON"
+                    checked={saveAsTemplateChoice === 'NON'}
+                    onChange={() => setSaveAsTemplateChoice('NON')}
+                  />
+                  <span>NON (Archiver uniquement)</span>
+                </label>
+              </div>
+
+              {saveAsTemplateChoice === 'OUI' && (
+                <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Nom du modèle *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      placeholder="Ex: Circuit de traitement des demandes de partenariat"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Description du modèle
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplateDescription}
+                      onChange={(e) => setNewTemplateDescription(e.target.value)}
+                      placeholder="Usage recommandé, instructions..."
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    ℹ️ Seule la structure (ordre, rôles, services, conditions) sera conservée. Les avis et validations passés ne sont jamais recopiés.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowArchiveModal(false)}
+                className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmArchive}
+                disabled={saveAsTemplateChoice === 'OUI' && !newTemplateName.trim()}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 disabled:opacity-50"
+              >
+                Confirmer l'archivage
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

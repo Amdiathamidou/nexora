@@ -756,6 +756,18 @@ mailRoutes.get('/mails/:id', requireAuth, requireCompanyScope, (req: Authenticat
         .all(String(workflowInstance.id))
     : [];
 
+  const parallelInterventions = workflowInstance
+    ? db
+        .prepare(`
+          SELECT i.*, u.full_name as user_full_name, u.role as user_actual_role
+          FROM workflow_step_interventions i
+          LEFT JOIN users u ON u.id = i.user_id
+          WHERE i.workflow_instance_id = ? AND i.company_id = ?
+          ORDER BY i.notified_at ASC
+        `)
+        .all(String(workflowInstance.id), companyId)
+    : [];
+
   const tasks = db
     .prepare(`
       SELECT t.*, u.full_name as assigned_user_name, s.name as service_name
@@ -855,6 +867,7 @@ mailRoutes.get('/mails/:id', requireAuth, requireCompanyScope, (req: Authenticat
     aiAnalyses,
     workflowInstance,
     workflowSteps,
+    parallelInterventions,
     tasks,
     comments,
     shipments,
@@ -1015,7 +1028,7 @@ mailRoutes.post('/mails/:id/orient', requireAuth, requireCompanyScope, async (re
   const user = req.user!;
   const companyId = user.companyId!;
   const mailId = String(req.params.id);
-  const { serviceId, circuitId, assignedAgentId, observations } = req.body ?? {};
+  const { serviceId, circuitId, templateId, customSteps, circuitType, assignedAgentId, observations } = req.body ?? {};
 
   const ctx = loadMailActionContext(user, mailId, companyId);
   if (!ctx) {
@@ -1041,11 +1054,14 @@ mailRoutes.post('/mails/:id/orient', requireAuth, requireCompanyScope, async (re
   let emailsTriggered = 0;
   const existingWfi = db.prepare('SELECT id FROM workflow_instances WHERE mail_id = ?').get(mailId);
 
-  if (circuitId && !existingWfi) {
+  if ((circuitId || templateId || (customSteps && customSteps.length > 0)) && !existingWfi) {
     await startWorkflowForMail({
       companyId,
       mailId,
-      circuitId: String(circuitId),
+      circuitId: circuitId ? String(circuitId) : null,
+      templateId: templateId ? String(templateId) : null,
+      customSteps: Array.isArray(customSteps) ? customSteps : undefined,
+      circuitType: circuitType || 'SEQUENTIEL',
       actor: user,
       targetServiceId: serviceId || null,
       assignedAgentId: assignedAgentId || null,
@@ -1413,11 +1429,12 @@ mailRoutes.post('/mails/:id/dispatch', requireAuth, requireCompanyScope, (req: A
   res.status(201).json({ id: shipId });
 });
 
-// Archive a mail — STRICTLY ENFORCES mandatory Secrétariat return for incoming mail!
+// Archive a mail — with optional saving of the circuit as reusable template!
 mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   const companyId = user.companyId!;
   const mailId = String(req.params.id);
+  const { saveAsTemplate, templateName, templateDescription, templateCategory } = req.body ?? {};
 
   if (!user.isSecretariat && user.role !== 'ADMIN') {
     res.status(403).json({ error: 'Seul le Secrétariat ou l’Admin peut procéder à l’archivage final.' });
@@ -1446,6 +1463,8 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
     return;
   }
 
+  let createdTemplateId: string | null = null;
+
   db.transaction(() => {
     db.prepare(`
       UPDATE mails
@@ -1462,6 +1481,62 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
       UPDATE workflow_step_executions SET status = 'TERMINE', decided_by = COALESCE(decided_by, ?), decided_at = COALESCE(decided_at, datetime('now'))
       WHERE mail_id = ? AND company_id = ? AND status IN ('EN_COURS', 'EN_ATTENTE')
     `).run(user.id, mailId, companyId);
+
+    // Si l'utilisateur a choisi d'enregistrer le circuit comme modèle réutilisable
+    if (saveAsTemplate && templateName) {
+      const wfi = db
+        .prepare('SELECT steps_snapshot_json FROM workflow_instances WHERE mail_id = ? AND company_id = ?')
+        .get(mailId, companyId) as { steps_snapshot_json: string } | undefined;
+
+      if (wfi?.steps_snapshot_json) {
+        const rawSteps = safeParseJson<Array<Record<string, unknown>>>(wfi.steps_snapshot_json, []);
+
+        // Nettoyage strict des anciennes données pour ne garder QUE la structure et les règles
+        const cleanSteps = rawSteps.map((s, idx) => ({
+          stepOrder: idx + 1,
+          name: s.name || `Étape ${idx + 1}`,
+          stepType: s.stepType || 'AGENT_TREATMENT',
+          mode: s.mode || 'SEQUENTIAL',
+          parallelRule: s.parallelRule || 'ALL',
+          minApprovals: s.minApprovals || 2,
+          targetRole: s.targetRole || null,
+          targetServiceId: s.targetServiceId || null,
+          assignedUserId: s.assignedUserId || null,
+          assignedUserIds: s.assignedUserIds || [],
+          parallelTargets: Array.isArray(s.parallelTargets)
+            ? (s.parallelTargets as Array<{ userId: string; role?: string; serviceId?: string; isRequired?: boolean }>).map((pt) => ({
+                userId: pt.userId,
+                role: pt.role,
+                serviceId: pt.serviceId,
+                isRequired: pt.isRequired !== false,
+              }))
+            : [],
+          slaHours: s.slaHours || 24,
+        }));
+
+        // Déterminer le type global du circuit
+        const hasParallel = cleanSteps.some((s) => s.mode === 'PARALLEL');
+        const hasSequential = cleanSteps.some((s) => s.mode === 'SEQUENTIAL');
+        const circuitType = hasParallel && hasSequential ? 'MIXTE' : hasParallel ? 'PARALLELE' : 'SEQUENTIEL';
+
+        createdTemplateId = newId('ctmpl');
+        db.prepare(`
+          INSERT INTO circuit_templates (
+            id, company_id, name, description, circuit_type, category, mail_direction, steps_json, is_active, created_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).run(
+          createdTemplateId,
+          companyId,
+          String(templateName).trim(),
+          templateDescription ? String(templateDescription).trim() : `Modèle extrait du courrier ${mail.reference}`,
+          circuitType,
+          templateCategory ? String(templateCategory).trim() : mail.category,
+          mail.direction,
+          JSON.stringify(cleanSteps),
+          user.id
+        );
+      }
+    }
   })();
 
   logAudit({
@@ -1473,8 +1548,10 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
     entityId: mailId,
     oldValue: mail.mail_status,
     newValue: 'ARCHIVE',
-    context: 'Clôture définitive et archivage.',
+    context: createdTemplateId
+      ? `Archivage et enregistrement du modèle de circuit "${templateName}" (ID: ${createdTemplateId})`
+      : 'Clôture définitive et archivage sans enregistrement de modèle.',
   });
 
-  res.json({ ok: true });
+  res.json({ ok: true, templateId: createdTemplateId });
 });

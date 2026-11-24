@@ -132,6 +132,49 @@ export interface MailActionLockInfo {
   } | null;
 }
 
+export type CircuitKind = 'SEQUENTIEL' | 'PARALLELE' | 'MIXTE';
+
+export interface ParallelInterventionTarget {
+  userId: string;
+  userName?: string;
+  role?: UserRole;
+  serviceId?: string | null;
+  serviceName?: string;
+  isRequired?: boolean; // true: obligatoire (bloquant selon règle), false: consultatif
+}
+
+export interface CustomCircuitStep {
+  stepOrder: number;
+  name: string;
+  stepType?: string;
+  mode: 'SEQUENTIAL' | 'PARALLEL';
+  parallelRule?: 'ALL' | 'MIN_COUNT' | 'CONSULTATIVE' | 'ANY_ONE';
+  minApprovals?: number;
+  targetRole?: UserRole;
+  targetServiceId?: string | null;
+  assignedUserId?: string | null;
+  assignedUserIds?: string[];
+  parallelTargets?: ParallelInterventionTarget[];
+  requiresPresident?: boolean;
+  slaHours?: number;
+}
+
+export interface CircuitTemplateItem {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string;
+  circuit_type: CircuitKind;
+  category: string;
+  mail_direction: MailDirection;
+  steps_json: string;
+  steps?: CustomCircuitStep[];
+  is_active: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AuthUser {
   id: string;
   companyId: string | null;

@@ -283,6 +283,49 @@ export function initSchema(): void {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS circuit_templates (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      circuit_type TEXT NOT NULL DEFAULT 'SEQUENTIEL', -- SEQUENTIEL | PARALLELE | MIXTE
+      category TEXT NOT NULL DEFAULT 'Général',
+      mail_direction TEXT NOT NULL DEFAULT 'ENTRANT',
+      steps_json TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_step_interventions (
+      id TEXT PRIMARY KEY,
+      workflow_step_id TEXT NOT NULL,
+      workflow_instance_id TEXT NOT NULL,
+      mail_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_role TEXT NOT NULL,
+      service_id TEXT,
+      service_name TEXT,
+      is_required INTEGER NOT NULL DEFAULT 1, -- 1: obligatoire, 0: consultatif
+      status TEXT NOT NULL DEFAULT 'EN_ATTENTE', -- EN_ATTENTE | AVIS_RENDU | VALIDE | REJETE
+      decision TEXT DEFAULT '', -- DONNER_AVIS | VALIDER | REJETER | DEMANDER_CORRECTION
+      opinion_text TEXT DEFAULT '',
+      document_id TEXT,
+      notified_at TEXT NOT NULL DEFAULT (datetime('now')),
+      viewed_at TEXT,
+      completed_at TEXT,
+      FOREIGN KEY (workflow_step_id) REFERENCES workflow_step_executions(id) ON DELETE CASCADE,
+      FOREIGN KEY (workflow_instance_id) REFERENCES workflow_instances(id) ON DELETE CASCADE,
+      FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS shipments (
       id TEXT PRIMARY KEY,
       mail_id TEXT NOT NULL,
