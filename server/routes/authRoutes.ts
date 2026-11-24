@@ -232,7 +232,7 @@ authRoutes.post('/register-company', (req: AuthenticatedRequest, res: Response) 
   });
 });
 
-authRoutes.post('/forgot-password', (req: AuthenticatedRequest, res: Response) => {
+authRoutes.post('/forgot-password', async (req: AuthenticatedRequest, res: Response) => {
   const { email } = req.body ?? {};
   if (!email) {
     res.status(400).json({ error: 'Adresse e-mail requise.' });
@@ -247,24 +247,24 @@ authRoutes.post('/forgot-password', (req: AuthenticatedRequest, res: Response) =
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     db.prepare('UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?').run(resetCode, expiresAt, user.id);
 
-    if (user.company_id) {
-      db.prepare(`
-        INSERT INTO email_logs (id, company_id, recipient_user_id, recipient_email, recipient_name, trigger_event, subject, body_text, delivery_status)
-        VALUES (?, ?, ?, ?, ?, 'PASSWORD_RESET', ?, ?, 'QUEUED_NO_SMTP')
-      `).run(
-        newId('eml'),
-        user.company_id,
-        user.id,
-        user.email,
-        user.full_name,
-        '[NEXORA] Code de réinitialisation de mot de passe',
-        `Votre code de réinitialisation temporaire (valable 30 min) : ${resetCode}`
-      );
+    // Envoi effectif de l'e-mail avec dispatchEmail
+    try {
+      const { dispatchEmail } = await import('../services/emailService.ts');
+      await dispatchEmail({
+        companyId: user.company_id || 'cmp_demo_group',
+        recipientUserId: user.id,
+        recipientEmail: user.email,
+        recipientName: user.full_name || 'Utilisateur',
+        triggerEvent: 'PASSWORD_RESET',
+        subject: '[NEXORA] Code de réinitialisation de votre mot de passe',
+        bodyText: `Bonjour ${user.full_name || ''},\n\nVous avez demandé la réinitialisation de votre mot de passe pour votre compte NEXORA.\n\nVoici votre code de vérification à 6 chiffres : ${resetCode}\n\nCe code est valable pendant 30 minutes.\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail en toute sécurité.\n\nL'équipe NEXORA`,
+      });
+    } catch (mailErr) {
+      console.error('[AUTH] Erreur envoi email reset password:', mailErr);
     }
 
     res.json({
-      message: 'Un code de réinitialisation a été généré et consigné pour votre compte.',
-      previewResetHint: `Code de vérification généré (environnement local) : ${resetCode}`,
+      message: 'Un code de réinitialisation à 6 chiffres a été envoyé à votre adresse e-mail (valable 30 minutes).',
     });
     return;
   }

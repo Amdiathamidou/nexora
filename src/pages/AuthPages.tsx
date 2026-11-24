@@ -239,7 +239,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
         method: 'POST',
         body: JSON.stringify({ email: resetEmail }),
       });
-      setResetMessage(res.previewResetHint ? `${res.message} ${res.previewResetHint}` : res.message);
+      setResetMessage(res.message);
       setResetStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
