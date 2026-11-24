@@ -698,9 +698,12 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   // Envoi de l'e-mail d'invitation avec le lien d'activation du compte
   const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
   const companyName = company?.legal_name || 'Votre entreprise';
-  const baseUrl = process.env.APP_URL?.trim() && !process.env.APP_URL.includes('localhost') 
-    ? process.env.APP_URL.replace(/\/$/, '') 
-    : `${req.protocol || 'http'}://${req.get('host') || 'localhost:3000'}`;
+  const rawEnvUrl = process.env.APP_URL?.trim();
+  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && !rawEnvUrl.includes('localhost') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+  const baseUrl = isValidEnvUrl 
+    ? rawEnvUrl.replace(/\/$/, '') 
+    : `${proto}://${req.get('host') || 'localhost:3000'}`;
   const activationUrl = `${baseUrl}/?action=activate&token=${invitationToken}&email=${encodeURIComponent(email)}`;
 
   try {
@@ -758,9 +761,12 @@ adminRoutes.post('/users/:id/resend-invitation', requireAuth, requireCompanyScop
 
   const company = db.prepare('SELECT legal_name FROM companies WHERE id = ?').get(companyId) as { legal_name: string } | undefined;
   const companyName = company?.legal_name || 'Votre entreprise';
-  const baseUrl = process.env.APP_URL?.trim() && !process.env.APP_URL.includes('localhost')
-    ? process.env.APP_URL.replace(/\/$/, '')
-    : `${req.protocol || 'http'}://${req.get('host') || 'localhost:3000'}`;
+  const rawEnvUrl = process.env.APP_URL?.trim();
+  const isValidEnvUrl = rawEnvUrl && !rawEnvUrl.includes('MY_APP_URL') && !rawEnvUrl.includes('localhost') && (rawEnvUrl.startsWith('http://') || rawEnvUrl.startsWith('https://'));
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+  const baseUrl = isValidEnvUrl
+    ? rawEnvUrl.replace(/\/$/, '')
+    : `${proto}://${req.get('host') || 'localhost:3000'}`;
   const activationUrl = `${baseUrl}/?action=activate&token=${newToken}&email=${encodeURIComponent(target.email)}`;
 
   try {
