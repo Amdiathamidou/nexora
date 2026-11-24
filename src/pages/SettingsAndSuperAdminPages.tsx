@@ -230,13 +230,19 @@ export function SettingsAndBillingPage() {
     }
   }, [loadAll, refreshSession]);
 
+  const { applyBrandColor } = useTheme();
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback('');
     setError('');
     try {
       await apiFetch('/api/settings', { method: 'PATCH', body: JSON.stringify(form) });
-      setFeedback('Paramètres de l’entreprise, cachet officiel et formats de référence enregistrés.');
+      if (form.primaryColor) {
+        applyBrandColor(form.primaryColor);
+      }
+      setFeedback('Paramètres de l’entreprise, identité visuelle et couleur principale enregistrés.');
+      await refreshSession();
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur sauvegarde');
@@ -545,7 +551,12 @@ export function SettingsAndBillingPage() {
 
         {/* 2. Thème & Couleur Principale */}
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Couleur Principale de l'Application</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Couleur Principale de l'Application</h3>
+            <span className="text-[11px] text-slate-500">
+              S'applique immédiatement aux menus, badges, boutons d'action et logo
+            </span>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             {[
               { name: 'Bleu Institutionnel', hex: '#2563EB' },
@@ -561,7 +572,10 @@ export function SettingsAndBillingPage() {
                 <button
                   key={c.hex}
                   type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, primaryColor: c.hex }))}
+                  onClick={() => {
+                    setForm((prev) => ({ ...prev, primaryColor: c.hex }));
+                    applyBrandColor(c.hex);
+                  }}
                   className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                     isSelected
                       ? 'border-slate-900 dark:border-white shadow-sm ring-2 ring-slate-900/20 dark:ring-white/20'
@@ -579,7 +593,10 @@ export function SettingsAndBillingPage() {
               <input
                 type="color"
                 value={form.primaryColor || '#2563EB'}
-                onChange={(e) => setForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, primaryColor: e.target.value }));
+                  applyBrandColor(e.target.value);
+                }}
                 className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-transparent"
                 title="Choisir une couleur personnalisée"
               />
@@ -587,7 +604,12 @@ export function SettingsAndBillingPage() {
                 type="text"
                 maxLength={7}
                 value={form.primaryColor}
-                onChange={(e) => setForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, primaryColor: e.target.value }));
+                  if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+                    applyBrandColor(e.target.value);
+                  }
+                }}
                 placeholder="#2563EB"
                 className="w-24 px-2 py-1 text-xs font-mono uppercase rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
               />

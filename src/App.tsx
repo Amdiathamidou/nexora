@@ -16,12 +16,20 @@ import { SettingsAndBillingPage, SuperAdminPage } from './pages/SettingsAndSuper
 import { TasksPage, WorkflowsPage } from './pages/WorkflowsAndTasksPages.tsx';
 
 function NexoraRouter() {
-  const { user, loading } = useAuth();
+  const { user, company, loading } = useAuth();
+  const { applyBrandColor } = useTheme();
   const [publicMode, setPublicMode] = useState<'site' | 'login' | 'register'>('site');
   const [currentPage, setCurrentPage] = useState<AppPage>('dashboard');
   const [selectedMailId, setSelectedMailId] = useState<string>('');
   const [globalSearch, setGlobalSearch] = useState('');
   const lastUserIdRef = useRef<string | null>(null);
+
+  // Application automatique de la couleur personnalisée de l'entreprise
+  useEffect(() => {
+    if (company?.primary_color) {
+      applyBrandColor(company.primary_color);
+    }
+  }, [company?.primary_color, applyBrandColor]);
 
   useEffect(() => {
     const nextUserId = user?.id ?? null;

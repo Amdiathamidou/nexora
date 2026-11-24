@@ -6,12 +6,41 @@
     --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-sans: 'Public Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --primary-color: #2563EB;
+    --primary-color-hover: #1D4ED8;
+    --primary-color-light: #EFF6FF;
+    --primary-color-ring: rgba(37, 99, 235, 0.2);
   }
 
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Classes utilitaires pour la couleur dynamique de personnalisation */
+  .btn-brand-primary {
+    background-color: var(--primary-color) !important;
+    color: #ffffff !important;
+    transition: filter 0.15s ease, opacity 0.15s ease;
+  }
+  .btn-brand-primary:hover {
+    background-color: var(--primary-color-hover) !important;
+  }
+  .btn-brand-primary:active {
+    filter: brightness(0.9);
+  }
+
+  .text-brand-primary {
+    color: var(--primary-color) !important;
+  }
+
+  .border-brand-primary {
+    border-color: var(--primary-color) !important;
+  }
+
+  .bg-brand-primary-light {
+    background-color: var(--primary-color-light) !important;
   }
 
   h1, h2, h3, h4, .font-display {

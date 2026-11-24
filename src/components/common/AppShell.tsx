@@ -170,7 +170,9 @@ export function AppShell({
             .map((item) => {
               const Icon = item.Icon;
               const active = currentPage === item.id || (item.id === 'mails' && currentPage === 'mail-detail');
-              const customBg = active && company?.primary_color ? { backgroundColor: company.primary_color, color: '#ffffff' } : undefined;
+              const customBg = active
+                ? { backgroundColor: company?.primary_color || 'var(--primary-color, #2563EB)', color: '#ffffff' }
+                : undefined;
               return (
                 <button
                   key={item.id}
@@ -182,9 +184,7 @@ export function AppShell({
                   style={customBg}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                     active
-                      ? company?.primary_color
-                        ? 'text-white shadow-sm'
-                        : 'bg-slate-900 text-white dark:bg-blue-600 dark:text-white'
+                      ? 'text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >

@@ -25,7 +25,7 @@ export function NexoraLogo({ className = '', showText = true, size = 'md' }: Nex
         aria-hidden="true"
         className="shrink-0 drop-shadow-sm"
       >
-        <rect width="32" height="32" rx="7" className="fill-slate-900 dark:fill-blue-600" />
+        <rect width="32" height="32" rx="7" style={{ fill: 'var(--primary-color, #2563EB)' }} />
         <path
           d="M9 22V10L16 17.5L23 10V22"
           stroke="#FFFFFF"
@@ -33,7 +33,7 @@ export function NexoraLogo({ className = '', showText = true, size = 'md' }: Nex
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path d="M9 10H23" stroke="#60A5FA" strokeWidth="1.6" strokeLinecap="round" strokeOpacity="0.65" />
+        <path d="M9 10H23" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeOpacity="0.65" />
       </svg>
       {showText && (
         <span className={`font-display ${current.text} font-black tracking-tight text-slate-900 dark:text-white`}>
