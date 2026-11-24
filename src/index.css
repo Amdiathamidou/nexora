@@ -18,6 +18,19 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Règle explicite pour garantir que tous les inputs, selects et textareas ont une couleur de texte lisible */
+  input, select, textarea {
+    color: #0f172a; /* slate-900 */
+  }
+  input::placeholder, textarea::placeholder {
+    color: #94a3b8; /* slate-400 */
+  }
+  .dark input:not(.bg-white):not([class*="bg-white"]):not([class*="bg-slate-50"]),
+  .dark select:not(.bg-white):not([class*="bg-white"]):not([class*="bg-slate-50"]),
+  .dark textarea:not(.bg-white):not([class*="bg-white"]):not([class*="bg-slate-50"]) {
+    color: #f8fafc; /* slate-50 en dark */
+  }
+
   /* Classes utilitaires pour la couleur dynamique de personnalisation */
   .btn-brand-primary {
     background-color: var(--primary-color) !important;

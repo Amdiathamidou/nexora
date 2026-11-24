@@ -419,7 +419,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="vous@organisation.bj"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
                   />
                 </div>
 
@@ -441,7 +441,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                      className="w-full px-4 py-3 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
                     />
                     <button
                       type="button"
@@ -560,7 +560,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entName}
                           onChange={(e) => setEntName(e.target.value)}
                           placeholder="ex: Cabinet Médical Espoir, Société Béninoise d'Énergie..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -569,7 +569,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                         <select
                           value={entSecteur}
                           onChange={(e) => setEntSecteur(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         >
                           {SECTEURS_ACTIVITE.map((s) => (
                             <option key={s} value={s}>{s}</option>
@@ -608,7 +608,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entIfu}
                           onChange={(e) => setEntIfu(e.target.value)}
                           placeholder="ex: 0201810294857"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -620,7 +620,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           <select
                             value={entIndicatif}
                             onChange={(e) => setEntIndicatif(e.target.value)}
-                            className="w-32 px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:border-indigo-600 outline-none"
+                            className="w-32 px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-xs font-semibold focus:border-indigo-600 outline-none"
                           >
                             {INDICATIFS_PAYS.map((ip) => (
                               <option key={ip.indicatif + ip.pays} value={ip.indicatif}>{ip.nom}</option>
@@ -632,7 +632,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                             value={entNumero}
                             onChange={(e) => setEntNumero(e.target.value)}
                             placeholder="ex: 01 20 21 22 23"
-                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                           />
                         </div>
                       </div>
@@ -644,7 +644,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entAdresse}
                           onChange={(e) => setEntAdresse(e.target.value)}
                           placeholder="ex: Rue 12.045, Ganhi"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -655,7 +655,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entVille}
                           onChange={(e) => setEntVille(e.target.value)}
                           placeholder="Cotonou"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -665,7 +665,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           type="text"
                           value={entPays}
                           onChange={(e) => setEntPays(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
                     </div>
@@ -690,7 +690,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entAdminName}
                           onChange={(e) => setEntAdminName(e.target.value)}
                           placeholder="ex: Paul KOUDJO"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -701,7 +701,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entFonction}
                           onChange={(e) => setEntFonction(e.target.value)}
                           placeholder="ex: Directeur Général, Gérant..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -715,7 +715,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={entServiceName}
                           onChange={(e) => setEntServiceName(e.target.value)}
                           placeholder="ex: Direction Générale, Secrétariat Exécutif, Cabinet..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                         <p className="text-[11px] text-slate-400 mt-1">
                           Ce service sera créé pour votre organisation et vous y serez rattaché en tant que responsable.
@@ -747,7 +747,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={partName}
                           onChange={(e) => setPartName(e.target.value)}
                           placeholder="ex: Christian AGBANGLA"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -758,7 +758,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={partProf}
                           onChange={(e) => setPartProf(e.target.value)}
                           placeholder="ex: Consultant indépendant, Avocat..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -770,7 +770,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           <select
                             value={partIndicatif}
                             onChange={(e) => setPartIndicatif(e.target.value)}
-                            className="w-32 px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:border-indigo-600 outline-none"
+                            className="w-32 px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-xs font-semibold focus:border-indigo-600 outline-none"
                           >
                             {INDICATIFS_PAYS.map((ip) => (
                               <option key={ip.indicatif + ip.pays} value={ip.indicatif}>{ip.nom}</option>
@@ -782,7 +782,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                             value={partNumero}
                             onChange={(e) => setPartNumero(e.target.value)}
                             placeholder="ex: 01 97 00 00 00"
-                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                           />
                         </div>
                       </div>
@@ -794,7 +794,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={partVille}
                           onChange={(e) => setPartVille(e.target.value)}
                           placeholder="Cotonou"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
 
@@ -804,7 +804,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           type="text"
                           value={partPays}
                           onChange={(e) => setPartPays(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                       </div>
                     </div>
@@ -831,7 +831,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="nom@entreprise.bj ou monadresse@gmail.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                     />
                   </div>
 
@@ -848,7 +848,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
                           placeholder="Minimum 6 caractères"
-                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                         <button
                           type="button"
@@ -872,7 +872,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                           value={regPasswordConfirm}
                           onChange={(e) => setRegPasswordConfirm(e.target.value)}
                           placeholder="Retapez le mot de passe"
-                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                         />
                         <button
                           type="button"
@@ -943,7 +943,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       required
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 outline-none"
                       placeholder="vous@organisation.bj"
                     />
                   </div>
@@ -966,7 +966,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       required
                       value={resetCode}
                       onChange={(e) => setResetCode(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm tracking-widest text-center font-mono focus:border-indigo-600 outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm tracking-widest text-center font-mono focus:border-indigo-600 outline-none"
                     />
                   </div>
                   <div>
@@ -977,7 +977,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       minLength={6}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 outline-none"
                     />
                   </div>
                   {error && <div className="text-xs text-red-600 font-medium">{error}</div>}
@@ -1039,7 +1039,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                       value={actPassword}
                       onChange={(e) => setActPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none pr-10"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none pr-10"
                     />
                     <button
                       type="button"
@@ -1060,7 +1060,7 @@ export function AuthPages({ initialMode, onBackPublic }: AuthPagesProps) {
                     value={actPasswordConfirm}
                     onChange={(e) => setActPasswordConfirm(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:border-indigo-600 focus:bg-white outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:border-indigo-600 focus:bg-white outline-none"
                   />
                 </div>
 
