@@ -1,6 +1,6 @@
 import { db } from '../db/database.ts';
 import { newId } from '../utils/crypto.ts';
-import { notifyDepartmentHeadOnAgentMailAssignment } from './emailService.ts';
+import { notifyDepartmentHeadOnAgentMailAssignment, notifyUserOnMailAssignment } from './emailService.ts';
 
 export function createNotification(args: {
   companyId: string;
@@ -93,8 +93,9 @@ export async function notifyMailAssignedToUser(args: {
   });
 
   // CRITICAL BUSINESS RULE: Whenever an Agent receives a mail, the head of their department receives an email!
+  let emailsSent = 0;
   if (targetUser.role === 'AGENT') {
-    return await notifyDepartmentHeadOnAgentMailAssignment({
+    emailsSent += await notifyDepartmentHeadOnAgentMailAssignment({
       companyId: args.companyId,
       mail: args.mail,
       agentUser: targetUser,
@@ -103,5 +104,17 @@ export async function notifyMailAssignedToUser(args: {
     });
   }
 
-  return 0;
+  // Si le destinataire est le Président, un Responsable ou un collaborateur désigné
+  // On lui envoie directement un email de notification
+  if (targetUser.role === 'PRESIDENT' || targetUser.role === 'RESPONSABLE') {
+    emailsSent += await notifyUserOnMailAssignment({
+      companyId: args.companyId,
+      mail: args.mail,
+      targetUser,
+      serviceId: args.serviceId,
+      assignedByName: args.assignedByName,
+    });
+  }
+
+  return emailsSent;
 }

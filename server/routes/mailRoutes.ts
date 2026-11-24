@@ -1129,7 +1129,7 @@ mailRoutes.post('/mails/:id/assign-agent', requireAuth, requireCompanyScope, asy
     .prepare('SELECT id, full_name, email, role FROM users WHERE id = ? AND company_id = ? AND is_active = 1')
     .get(String(agentId), companyId) as { id: string; full_name: string; email: string; role: string } | undefined;
   if (!targetAgent) {
-    res.status(404).json({ error: 'Agent introuvable dans cette entreprise.' });
+    res.status(404).json({ error: 'Utilisateur destinataire introuvable dans cette entreprise.' });
     return;
   }
 

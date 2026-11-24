@@ -86,6 +86,90 @@ export async function dispatchEmail(params: SendEmailParams): Promise<{ id: stri
 }
 
 /**
+ * RÈGLE MÉTIER :
+ * Notifie par email un utilisateur (Président, Responsable, Collaborateur, ou Agent)
+ * lorsqu'un courrier lui est assigné / orienté ou soumis pour validation/action.
+ */
+export async function notifyUserOnMailAssignment(args: {
+  companyId: string;
+  mail: {
+    id: string;
+    reference: string;
+    direction: string;
+    subject: string;
+    sender_name?: string;
+    sender_org?: string;
+    priority: string;
+    due_date?: string;
+  };
+  targetUser: {
+    id: string;
+    full_name: string;
+    email: string;
+    role: string;
+  };
+  serviceId?: string | null;
+  assignedByName: string;
+  actionRequired?: string;
+}): Promise<number> {
+  const { companyId, mail, targetUser, assignedByName, actionRequired } = args;
+  if (!targetUser.email) return 0;
+
+  const roleLabel =
+    targetUser.role === 'PRESIDENT'
+      ? 'Monsieur le Président'
+      : targetUser.role === 'RESPONSABLE'
+      ? 'Responsable de service'
+      : targetUser.role === 'ADMIN'
+      ? 'Administrateur'
+      : 'Collaborateur';
+
+  const salutation =
+    targetUser.role === 'PRESIDENT'
+      ? `Monsieur le Président,`
+      : `Bonjour ${targetUser.full_name},`;
+
+  const subject =
+    targetUser.role === 'PRESIDENT'
+      ? `[NEXORA] Courrier pour décision / validation présidentielle — ${mail.reference}`
+      : `[NEXORA] Nouveau courrier assigné — ${mail.reference} : ${mail.subject}`;
+
+  const bodyText = [
+    salutation,
+    ``,
+    targetUser.role === 'PRESIDENT'
+      ? `Un courrier vient de vous être soumis pour décision, validation ou signature présidentielle dans la plateforme NEXORA.`
+      : `Un courrier vient de vous être affecté / orienté par ${assignedByName}.`,
+    ``,
+    `• Référence interne : ${mail.reference}`,
+    `• Sens du courrier : ${mail.direction}`,
+    `• Objet : ${mail.subject}`,
+    `• Expéditeur : ${mail.sender_name || 'Interne'} ${mail.sender_org ? `(${mail.sender_org})` : ''}`,
+    `• Priorité : ${mail.priority}`,
+    `• Échéance : ${mail.due_date || 'Non définie'}`,
+    actionRequired ? `• Action demandée : ${actionRequired}` : null,
+    `• Transmis / affecté par : ${assignedByName}`,
+    ``,
+    `Connectez-vous à votre espace NEXORA pour consulter le document, rédiger ou apposer votre visa / signature :`,
+    ``,
+    `— Plateforme NEXORA`,
+  ].filter(Boolean).join('\n');
+
+  await dispatchEmail({
+    companyId,
+    mailId: mail.id,
+    recipientUserId: targetUser.id,
+    recipientEmail: targetUser.email,
+    recipientName: targetUser.full_name,
+    triggerEvent: targetUser.role === 'PRESIDENT' ? 'VALIDATION_PRESIDENT' : 'AFFECTATION_COURRIER',
+    subject,
+    bodyText,
+  });
+
+  return 1;
+}
+
+/**
  * RÈGLE MÉTIER IMPÉRATIVE :
  * Dès qu'un agent reçoit un courrier (affectation directe, étape de circuit ou transfert),
  * le chef de son département (Responsable du service) reçoit automatiquement un e-mail.

@@ -486,7 +486,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   } = data;
 
   const activeStep = workflowSteps.find((s) => s.status === 'EN_COURS');
-  const agents = users.filter((u) => u.role === 'AGENT');
+  const assignableUsers = users.filter((u) => u.isActive !== false);
   const effectiveSavedStamp =
     customStampImg || currentUserSignAssets?.stampImage || currentUserSignAssets?.companyStampImage || '';
 
@@ -692,15 +692,15 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                 </div>
               )}
 
-              {/* Assign to Agent -> Sends Department Head Email! */}
+              {/* Assign to Agent / Member -> Sends Department Head / Assignee Email! */}
               {actionLock.canAssignAgent && (
                 <form onSubmit={handleAssignAgent} className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold flex items-center gap-1.5">
                       <UserCheck className="w-4 h-4 text-blue-600" />
-                      <span>Affecter à un Agent</span>
+                      <span>Affecter à un collaborateur</span>
                     </p>
-                    <span className="text-[11px] text-slate-500">Déclenche un e-mail automatique au chef de département</span>
+                    <span className="text-[11px] text-slate-500">Notifie automatiquement par e-mail</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <select
@@ -709,12 +709,28 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       onChange={(e) => setAssignAgentId(e.target.value)}
                       className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                     >
-                      <option value="">Choisir un agent...</option>
-                      {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.full_name}
-                        </option>
-                      ))}
+                      <option value="">Sélectionner un collaborateur...</option>
+                      {['PRESIDENT', 'RESPONSABLE', 'AGENT', 'ADMIN'].map((roleKey) => {
+                        const groupUsers = assignableUsers.filter((u) => u.role === roleKey);
+                        if (groupUsers.length === 0) return null;
+                        const groupLabel =
+                          roleKey === 'PRESIDENT'
+                            ? 'Présidence'
+                            : roleKey === 'RESPONSABLE'
+                            ? 'Responsables de Direction / Service'
+                            : roleKey === 'AGENT'
+                            ? 'Agents & Collaborateurs'
+                            : 'Administrateurs';
+                        return (
+                          <optgroup key={roleKey} label={groupLabel}>
+                            {groupUsers.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.full_name} {a.job_title ? `(${a.job_title})` : `[${a.role}]`}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                     <input
                       type="date"
@@ -727,14 +743,14 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                     type="text"
                     value={assignInstructions}
                     onChange={(e) => setAssignInstructions(e.target.value)}
-                    placeholder="Instructions de traitement pour l’agent..."
+                    placeholder="Instructions de traitement..."
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                   />
                   <button
                     type="submit"
                     className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500"
                   >
-                    Affecter à l’agent &amp; notifier le chef de département
+                    Affecter le dossier &amp; notifier par e-mail
                   </button>
                 </form>
               )}
@@ -1147,7 +1163,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           {/* Documents & Versions â€” with Inline Preview */}
           <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-display text-base font-bold">Documents associÃ©s ({documents.length})</h2>
+              <h2 className="font-display text-base font-bold">Documents associés ({documents.length})</h2>
               {actionLock.canAct && actionLock.canUploadDocument && (
                 <div className="flex items-center gap-2">
                   <select
@@ -1155,10 +1171,10 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                     onChange={(e) => setDocKind(e.target.value)}
                     className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                   >
-                    <option value="PROJET_REPONSE">Projet de rÃ©ponse</option>
-                    <option value="REPONSE_DEFINITIVE">RÃ©ponse dÃ©finitive</option>
-                    <option value="PIECE_JOINTE">PiÃ¨ce jointe</option>
-                    <option value="PREUVE_EXPEDITION">Preuve d&#39;expÃ©dition</option>
+                    <option value="PROJET_REPONSE">Projet de réponse</option>
+                    <option value="REPONSE_DEFINITIVE">Réponse définitive</option>
+                    <option value="PIECE_JOINTE">Pièce jointe</option>
+                    <option value="PREUVE_EXPEDITION">Preuve d&#39;expédition</option>
                     <option value="JUSTIFICATIF">Justificatif</option>
                   </select>
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
@@ -1182,7 +1198,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                         <div className="min-w-0">
                           <p className="font-medium text-slate-900 dark:text-white truncate">{doc.filename}</p>
                           <p className="text-slate-500">
-                            {doc.doc_kind} Â· v{doc.version} Â· {Math.max(1, Math.round(doc.size_bytes / 1024))} Ko
+                            {doc.doc_kind} · v{doc.version} · {Math.max(1, Math.round(doc.size_bytes / 1024))} Ko
                           </p>
                         </div>
                       </div>
@@ -1212,13 +1228,13 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                           type="button"
                           onClick={() => {
                             downloadAuthenticatedFile(`/api/documents/${doc.id}/file`, doc.filename).catch((err) =>
-                              setError(err instanceof Error ? err.message : 'Erreur tÃ©lÃ©chargement')
+                              setError(err instanceof Error ? err.message : 'Erreur téléchargement')
                             );
                           }}
                           className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400 font-medium hover:underline"
                         >
                           <Download className="w-3.5 h-3.5" />
-                          <span>TÃ©lÃ©charger</span>
+                          <span>Télécharger</span>
                         </button>
                       </div>
                     </div>
@@ -1226,7 +1242,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2">
                         {docLoadingId === doc.id ? (
                           <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-                            Chargement de l&#39;aperÃ§uâ€¦
+                            Chargement de l&#39;aperçu…
                           </div>
                         ) : docBlobUrls[doc.id] ? (
                           <div className="relative max-h-[600px] overflow-auto rounded border border-slate-100 dark:border-slate-800">
@@ -1244,14 +1260,14 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                               />
                             ) : (
                               <div className="p-4 text-xs text-slate-500 text-center">
-                                Format non supportÃ© pour l&#39;aperÃ§u en ligne ({doc.mime_type}).
-                                Veuillez tÃ©lÃ©charger le fichier.
+                                Format non supporté pour l&#39;aperçu en ligne ({doc.mime_type}).
+                                Veuillez télécharger le fichier.
                               </div>
                             )}
                           </div>
                         ) : (
                           <div className="flex items-center justify-center py-8 text-sm text-red-500">
-                            Ã‰chec de chargement de l&#39;aperÃ§u
+                            Échec de chargement de l&#39;aperçu
                           </div>
                         )}
                       </div>
@@ -1266,14 +1282,14 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           {(mail.direction === 'ENTRANT' || (mail as unknown as { requires_response?: number }).requires_response === 1) && (
             <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-base font-bold">ðŸ“ Projet de rÃ©ponse / Document de travail</h2>
+                <h2 className="font-display text-base font-bold">📝 Projet de réponse / Document de travail</h2>
                 {draftSaved && (
                   <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> SauvegardÃ©
+                    <CheckCircle2 className="w-3 h-3" /> Sauvegardé
                   </span>
                 )}
                 {draftSaving && (
-                  <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400">Sauvegarde en coursâ€¦</span>
+                  <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400">Sauvegarde en cours…</span>
                 )}
               </div>
 
@@ -1285,24 +1301,24 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                   <button type="button" onClick={() => execDraftCommand('italic')} title="Italique" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
                     <Italic className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={() => execDraftCommand('underline')} title="SoulignÃ©" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                  <button type="button" onClick={() => execDraftCommand('underline')} title="Souligné" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
                     <Underline className="w-4 h-4" />
                   </button>
                   <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-                  <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner Ã  gauche" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                  <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner à gauche" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
                     <AlignLeft className="w-4 h-4" />
                   </button>
                   <button type="button" onClick={() => execDraftCommand('justifyCenter')} title="Centrer" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
                     <AlignCenter className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner Ã  droite" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                  <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner à droite" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
                     <AlignRight className="w-4 h-4" />
                   </button>
                   <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-                  <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste Ã  puces" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
+                  <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste à puces" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
                     â€¢
                   </button>
-                  <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numÃ©rotÃ©e" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
+                  <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numérotée" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
                     1.
                   </button>
                   <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
@@ -1315,7 +1331,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                     <option value="1">Petit</option>
                     <option value="3">Normal</option>
                     <option value="5">Grand</option>
-                    <option value="7">TrÃ¨s grand</option>
+                    <option value="7">Très grand</option>
                   </select>
                 </div>
               )}
@@ -1342,18 +1358,18 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{draftSaving ? 'Sauvegardeâ€¦' : 'Sauvegarder le brouillon'}</span>
+                    <span>{draftSaving ? 'Sauvegarde…' : 'Sauvegarder le brouillon'}</span>
                   </button>
                 ) : (
                   <p className="text-[11px] text-slate-500">
-                    Ã‰dition dÃ©sactivÃ©e â€” le dossier n&#39;est pas Ã  votre niveau de traitement.
+                    Édition désactivée — le dossier n&#39;est pas à votre niveau de traitement.
                   </p>
                 )}
                 {(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by && (
                   <p className="text-[11px] text-slate-500 text-right">
-                    DerniÃ¨re modification par{' '}
+                    Dernière modification par{' '}
                     <span className="font-medium">{(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}</span>
-                    {' Â· '}
+                    {' · '}
                     {((mail as unknown as { draft_response_updated_at?: string }).draft_response_updated_at || '').slice(0, 16)}
                   </p>
                 )}
