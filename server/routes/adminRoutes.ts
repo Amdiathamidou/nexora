@@ -611,7 +611,7 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
 
   // Règle d'unicité et de désignation du Président : une entreprise ne peut avoir qu'un seul Président
   if (role === 'PRESIDENT') {
-    const existingPres = db.prepare('SELECT id, full_name FROM users WHERE company_id = ? AND role = "PRESIDENT" AND is_active = 1').get(companyId) as { id: string; full_name: string } | undefined;
+    const existingPres = db.prepare("SELECT id, full_name FROM users WHERE company_id = ? AND role = 'PRESIDENT' AND is_active = 1").get(companyId) as { id: string; full_name: string } | undefined;
     if (existingPres) {
       res.status(400).json({ error: `Un Président est déjà désigné pour cette organisation (${existingPres.full_name}). Vous devez d'abord modifier son rôle avant d'en nommer un nouveau.` });
       return;
@@ -746,7 +746,7 @@ adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('
 
   // Règle d'unicité lors du passage au rôle PRESIDENT
   if (role === 'PRESIDENT' && target.role !== 'PRESIDENT') {
-    const existingPres = db.prepare('SELECT id, full_name FROM users WHERE company_id = ? AND role = "PRESIDENT" AND id != ? AND is_active = 1').get(companyId, targetId) as { id: string; full_name: string } | undefined;
+    const existingPres = db.prepare("SELECT id, full_name FROM users WHERE company_id = ? AND role = 'PRESIDENT' AND id != ? AND is_active = 1").get(companyId, targetId) as { id: string; full_name: string } | undefined;
     if (existingPres) {
       res.status(400).json({ error: `Un Président est déjà désigné (${existingPres.full_name}). Veuillez d'abord modifier son rôle.` });
       return;
