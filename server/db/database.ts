@@ -458,6 +458,15 @@ export function initSchema(): void {
   safeAddCol('mail_signatures', "represented_name TEXT DEFAULT NULL");
   safeAddCol('mail_signatures', "represented_role TEXT DEFAULT NULL");
   safeAddCol('mails', "draft_response_html TEXT DEFAULT ''");
+
+  // Migrations Organisation, Hiérarchie, Départements & Audit de permissions
+  safeAddCol('services', "parent_id TEXT DEFAULT NULL");
+  safeAddCol('services', "type TEXT DEFAULT 'SERVICE'"); // 'DEPARTEMENT', 'SERVICE', 'UNITE'
+  safeAddCol('users', "department_id TEXT DEFAULT NULL");
+  safeAddCol('users', "service_id TEXT DEFAULT NULL");
+  safeAddCol('users', "unit_name TEXT DEFAULT ''");
+  safeAddCol('users', "superior_user_id TEXT DEFAULT NULL");
+  safeAddCol('users', "permissions_audit_json TEXT DEFAULT '{}'");
   safeAddCol('mails', "draft_response_text TEXT DEFAULT ''");
   safeAddCol('mails', "draft_response_updated_by TEXT DEFAULT NULL");
   safeAddCol('mails', "draft_response_updated_at TEXT DEFAULT NULL");

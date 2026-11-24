@@ -102,6 +102,9 @@ export interface ServiceItem {
   manager_email?: string | null;
   is_secretariat: number;
   reception_rules: string;
+  parent_id?: string | null;
+  parent_name?: string | null;
+  type?: 'DEPARTEMENT' | 'SERVICE' | 'UNITE';
   member_count?: number;
   active_mail_count?: number;
 }

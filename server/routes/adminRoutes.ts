@@ -547,9 +547,18 @@ adminRoutes.get('/users', requireAuth, requireCompanyScope, (req: AuthenticatedR
   const companyId = req.user!.companyId!;
   const users = db
     .prepare(`
-      SELECT id, company_id, full_name, job_title, email, phone, role, is_active, avatar_url, permissions_json, created_at
-      FROM users WHERE company_id = ?
-      ORDER BY role ASC, full_name ASC
+      SELECT u.id, u.company_id, u.full_name, u.job_title, u.email, u.phone, u.role, u.is_active, 
+             u.avatar_url, u.permissions_json, u.department_id, u.service_id, u.unit_name, 
+             u.superior_user_id, u.permissions_audit_json, u.created_at,
+             sup.full_name as superior_name,
+             dept.name as department_name,
+             svc.name as service_name
+      FROM users u
+      LEFT JOIN users sup ON sup.id = u.superior_user_id
+      LEFT JOIN services dept ON dept.id = u.department_id
+      LEFT JOIN services svc ON svc.id = u.service_id
+      WHERE u.company_id = ?
+      ORDER BY u.role ASC, u.full_name ASC
     `)
     .all(companyId) as Array<Record<string, unknown>>;
 
@@ -565,26 +574,57 @@ adminRoutes.get('/users', requireAuth, requireCompanyScope, (req: AuthenticatedR
   const enriched = users.map((u) => ({
     ...u,
     permissions: safeParseJson(String(u.permissions_json), {}),
+    permissionsAudit: safeParseJson(String(u.permissions_audit_json), {}),
     services: memberships.filter((m) => m.user_id === u.id),
   }));
 
   res.json({ users: enriched });
 });
 
+// Helper de détection de boucles hiérarchiques récursives (DAG)
+function checkHierarchyLoop(candidateUserId: string, targetSuperiorId: string, companyId: string): boolean {
+  if (!targetSuperiorId || candidateUserId === targetSuperiorId) return true;
+  let currentSupId: string | null = targetSuperiorId;
+  const visited = new Set<string>([candidateUserId]);
+
+  while (currentSupId) {
+    if (visited.has(currentSupId)) return true;
+    visited.add(currentSupId);
+    const row = db.prepare('SELECT superior_user_id FROM users WHERE id = ? AND company_id = ?').get(currentSupId, companyId) as { superior_user_id: string | null } | undefined;
+    currentSupId = row?.superior_user_id || null;
+  }
+  return false;
+}
+
 adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const actor = req.user!;
   const companyId = actor.companyId!;
-  const { fullName, jobTitle, email, phone, password, role, serviceIds, permissions } = req.body ?? {};
+  const { 
+    fullName, jobTitle, email, phone, password, role, serviceIds, permissions,
+    departmentId, serviceId, unitName, superiorUserId, permissionsAudit
+  } = req.body ?? {};
 
   if (!fullName || !email || !password || !['ADMIN', 'PRESIDENT', 'RESPONSABLE', 'AGENT'].includes(role)) {
     res.status(400).json({ error: 'Nom, e-mail, mot de passe et rôle valide requis.' });
     return;
   }
 
-  // Security Rule 1 & 2: Admin cannot grant or self-assign presidential role or presidential signature powers
+  // Règle d'unicité et de désignation du Président : une entreprise ne peut avoir qu'un seul Président
   if (role === 'PRESIDENT') {
-    res.status(403).json({ error: 'L’administrateur ne peut pas créer ni s’attribuer le rôle de Président.' });
-    return;
+    const existingPres = db.prepare('SELECT id, full_name FROM users WHERE company_id = ? AND role = "PRESIDENT" AND is_active = 1').get(companyId) as { id: string; full_name: string } | undefined;
+    if (existingPres) {
+      res.status(400).json({ error: `Un Président est déjà désigné pour cette organisation (${existingPres.full_name}). Vous devez d'abord modifier son rôle avant d'en nommer un nouveau.` });
+      return;
+    }
+  }
+
+  // Vérification de boucle hiérarchique
+  if (superiorUserId) {
+    const supUser = db.prepare('SELECT id FROM users WHERE id = ? AND company_id = ?').get(superiorUserId, companyId);
+    if (!supUser) {
+      res.status(400).json({ error: 'Le supérieur hiérarchique sélectionné est introuvable.' });
+      return;
+    }
   }
 
   // Sanitize permissions: Admin can never grant delegation or presidential signature power via permissions
@@ -599,10 +639,21 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
   }
 
   const userId = newId('usr');
+  const auditRecord = {
+    suggestedPermissions: permissionsAudit?.suggestedPermissions || {},
+    manualModifications: permissionsAudit?.manualModifications || false,
+    validatedByUserId: actor.id,
+    validatedByUserName: actor.fullName,
+    validatedAt: new Date().toISOString(),
+  };
+
   db.transaction(() => {
     db.prepare(`
-      INSERT INTO users (id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, permissions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      INSERT INTO users (
+        id, company_id, full_name, job_title, email, phone, password_hash, role, is_active, 
+        permissions_json, department_id, service_id, unit_name, superior_user_id, permissions_audit_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
     `).run(
       userId,
       companyId,
@@ -612,7 +663,12 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       String(phone || '').trim(),
       hashPassword(String(password)),
       role,
-      JSON.stringify(sanitizedPermissions)
+      JSON.stringify(sanitizedPermissions),
+      departmentId || null,
+      serviceId || null,
+      String(unitName || '').trim(),
+      superiorUserId || null,
+      JSON.stringify(auditRecord)
     );
 
     if (Array.isArray(serviceIds)) {
@@ -620,6 +676,13 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
       for (const sid of serviceIds) {
         insUs.run(userId, String(sid), companyId);
       }
+    }
+    // Assurer également le rattachement au service principal ou département
+    if (serviceId) {
+      db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(userId, String(serviceId), companyId);
+    }
+    if (departmentId) {
+      db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(userId, String(departmentId), companyId);
     }
   })();
 
@@ -630,7 +693,7 @@ adminRoutes.post('/users', requireAuth, requireCompanyScope, requireRoles('ADMIN
     action: 'CREATION_UTILISATEUR',
     entityType: 'USER',
     entityId: userId,
-    newValue: { fullName, email, role },
+    newValue: { fullName, email, role, jobTitle, superiorUserId, departmentId, serviceId },
   });
 
   res.status(201).json({ id: userId });
@@ -640,33 +703,51 @@ adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('
   const actor = req.user!;
   const companyId = actor.companyId!;
   const targetId = String(req.params.id);
-  const { fullName, jobTitle, phone, role, isActive, permissions, serviceIds } = req.body ?? {};
+  const { 
+    fullName, jobTitle, phone, role, isActive, permissions, serviceIds,
+    departmentId, serviceId, unitName, superiorUserId, permissionsAudit
+  } = req.body ?? {};
 
   const target = db
-    .prepare('SELECT id, role FROM users WHERE id = ? AND company_id = ?')
-    .get(targetId, companyId) as { id: string; role: string } | undefined;
+    .prepare('SELECT id, role, full_name FROM users WHERE id = ? AND company_id = ?')
+    .get(targetId, companyId) as { id: string; role: string; full_name: string } | undefined;
   if (!target) {
     res.status(404).json({ error: 'Utilisateur introuvable.' });
     return;
   }
 
-  // Security Rule 2: Admin cannot promote anyone to PRESIDENT or change President's role
+  // Règle d'unicité lors du passage au rôle PRESIDENT
   if (role === 'PRESIDENT' && target.role !== 'PRESIDENT') {
-    res.status(403).json({ error: 'L’administrateur ne peut pas accorder le rôle ou le pouvoir de Président.' });
-    return;
-  }
-  if (target.role === 'PRESIDENT' && role && role !== 'PRESIDENT') {
-    res.status(403).json({ error: 'L’administrateur ne peut pas destituer le Président.' });
-    return;
+    const existingPres = db.prepare('SELECT id, full_name FROM users WHERE company_id = ? AND role = "PRESIDENT" AND id != ? AND is_active = 1').get(companyId, targetId) as { id: string; full_name: string } | undefined;
+    if (existingPres) {
+      res.status(400).json({ error: `Un Président est déjà désigné (${existingPres.full_name}). Veuillez d'abord modifier son rôle.` });
+      return;
+    }
   }
 
-  // Sanitize permissions: Admin can never grant delegation or presidential signature power via permissions
+  // Vérification de boucle hiérarchique
+  if (superiorUserId) {
+    if (checkHierarchyLoop(targetId, String(superiorUserId), companyId)) {
+      res.status(400).json({ error: 'Boucle hiérarchique interdite : un utilisateur ne peut pas être son propre supérieur, directement ou indirectement.' });
+      return;
+    }
+  }
+
+  // Sanitize permissions
   let sanitizedPermissions: Record<string, unknown> | undefined = undefined;
   if (permissions !== undefined && permissions !== null) {
     sanitizedPermissions = { ...(permissions as Record<string, unknown>) };
     delete sanitizedPermissions.can_validate_delegation;
     delete sanitizedPermissions.presidential_signature;
   }
+
+  const auditRecord = permissionsAudit ? {
+    suggestedPermissions: permissionsAudit.suggestedPermissions || {},
+    manualModifications: permissionsAudit.manualModifications ?? false,
+    validatedByUserId: actor.id,
+    validatedByUserName: actor.fullName,
+    validatedAt: new Date().toISOString(),
+  } : undefined;
 
   db.transaction(() => {
     db.prepare(`
@@ -676,15 +757,31 @@ adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('
           phone = COALESCE(?, phone),
           role = COALESCE(?, role),
           is_active = COALESCE(?, is_active),
-          permissions_json = COALESCE(?, permissions_json)
+          permissions_json = CASE WHEN ? IS NOT NULL THEN ? ELSE permissions_json END,
+          department_id = CASE WHEN ? IS NOT NULL THEN ? ELSE department_id END,
+          service_id = CASE WHEN ? IS NOT NULL THEN ? ELSE service_id END,
+          unit_name = CASE WHEN ? IS NOT NULL THEN ? ELSE unit_name END,
+          superior_user_id = CASE WHEN ? IS NOT NULL THEN ? ELSE superior_user_id END,
+          permissions_audit_json = CASE WHEN ? IS NOT NULL THEN ? ELSE permissions_audit_json END
       WHERE id = ? AND company_id = ?
     `).run(
-      fullName ?? null,
-      jobTitle ?? null,
-      phone ?? null,
+      fullName ? String(fullName).trim() : null,
+      jobTitle ? String(jobTitle).trim() : null,
+      phone !== undefined ? String(phone).trim() : null,
       role ?? null,
       isActive !== undefined ? (isActive ? 1 : 0) : null,
-      sanitizedPermissions !== undefined ? JSON.stringify(sanitizedPermissions) : null,
+      sanitizedPermissions ? JSON.stringify(sanitizedPermissions) : null,
+      sanitizedPermissions ? JSON.stringify(sanitizedPermissions) : null,
+      departmentId !== undefined ? (departmentId || null) : null,
+      departmentId !== undefined ? (departmentId || null) : null,
+      serviceId !== undefined ? (serviceId || null) : null,
+      serviceId !== undefined ? (serviceId || null) : null,
+      unitName !== undefined ? String(unitName).trim() : null,
+      unitName !== undefined ? String(unitName).trim() : null,
+      superiorUserId !== undefined ? (superiorUserId || null) : null,
+      superiorUserId !== undefined ? (superiorUserId || null) : null,
+      auditRecord ? JSON.stringify(auditRecord) : null,
+      auditRecord ? JSON.stringify(auditRecord) : null,
       targetId,
       companyId
     );
@@ -702,10 +799,10 @@ adminRoutes.patch('/users/:id', requireAuth, requireCompanyScope, requireRoles('
     companyId,
     userId: actor.id,
     userName: actor.fullName,
-    action: 'MODIFICATION_PERMISSIONS_UTILISATEUR',
+    action: 'MODIFICATION_UTILISATEUR',
     entityType: 'USER',
     entityId: targetId,
-    newValue: { role, isActive, permissions },
+    newValue: { role, isActive, permissions: sanitizedPermissions, superiorUserId, departmentId, serviceId },
   });
 
   res.json({ ok: true });
@@ -716,12 +813,14 @@ adminRoutes.get('/services', requireAuth, requireCompanyScope, (req: Authenticat
   const services = db
     .prepare(`
       SELECT s.*, u.full_name as manager_name, u.email as manager_email,
+             parent.name as parent_name,
              (SELECT COUNT(*) FROM user_services us WHERE us.service_id = s.id) as member_count,
              (SELECT COUNT(*) FROM mails m WHERE m.current_service_id = s.id AND m.archive_status != 'ARCHIVE') as active_mail_count
       FROM services s
       LEFT JOIN users u ON u.id = s.manager_user_id
+      LEFT JOIN services parent ON parent.id = s.parent_id
       WHERE s.company_id = ?
-      ORDER BY s.is_secretariat DESC, s.name ASC
+      ORDER BY s.type ASC, s.is_secretariat DESC, s.name ASC
     `)
     .all(companyId);
 
@@ -731,17 +830,29 @@ adminRoutes.get('/services', requireAuth, requireCompanyScope, (req: Authenticat
 adminRoutes.post('/services', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const actor = req.user!;
   const companyId = actor.companyId!;
-  const { name, description, managerUserId, isSecretariat, receptionRules } = req.body ?? {};
+  const { name, description, managerUserId, isSecretariat, receptionRules, parentId, type } = req.body ?? {};
   if (!name) {
-    res.status(400).json({ error: 'Le nom du service est obligatoire.' });
+    res.status(400).json({ error: 'Le nom du département ou service est obligatoire.' });
     return;
   }
 
   const id = newId('svc');
+  const orgType = ['DEPARTEMENT', 'SERVICE', 'UNITE'].includes(type) ? type : 'SERVICE';
+
   db.prepare(`
-    INSERT INTO services (id, company_id, name, description, manager_user_id, is_secretariat, reception_rules)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, companyId, String(name).trim(), String(description || ''), managerUserId || null, isSecretariat ? 1 : 0, String(receptionRules || ''));
+    INSERT INTO services (id, company_id, name, description, manager_user_id, is_secretariat, reception_rules, parent_id, type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, 
+    companyId, 
+    String(name).trim(), 
+    String(description || ''), 
+    managerUserId || null, 
+    isSecretariat ? 1 : 0, 
+    String(receptionRules || ''),
+    parentId || null,
+    orgType
+  );
 
   if (managerUserId) {
     db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(String(managerUserId), id, companyId);
@@ -753,16 +864,34 @@ adminRoutes.post('/services', requireAuth, requireCompanyScope, requireRoles('AD
 adminRoutes.patch('/services/:id', requireAuth, requireCompanyScope, requireRoles('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const companyId = req.user!.companyId!;
   const id = String(req.params.id);
-  const { name, description, managerUserId, receptionRules } = req.body ?? {};
+  const { name, description, managerUserId, receptionRules, parentId, type } = req.body ?? {};
+
+  // Empêcher boucle parentale
+  if (parentId && parentId === id) {
+    res.status(400).json({ error: 'Une entité ne peut pas être son propre parent.' });
+    return;
+  }
 
   db.prepare(`
     UPDATE services
     SET name = COALESCE(?, name),
         description = COALESCE(?, description),
         manager_user_id = ?,
-        reception_rules = COALESCE(?, reception_rules)
+        reception_rules = COALESCE(?, reception_rules),
+        parent_id = CASE WHEN ? IS NOT NULL THEN ? ELSE parent_id END,
+        type = COALESCE(?, type)
     WHERE id = ? AND company_id = ?
-  `).run(name ?? null, description ?? null, managerUserId || null, receptionRules ?? null, id, companyId);
+  `).run(
+    name ?? null, 
+    description ?? null, 
+    managerUserId || null, 
+    receptionRules ?? null, 
+    parentId !== undefined ? (parentId || null) : null,
+    parentId !== undefined ? (parentId || null) : null,
+    type ?? null,
+    id, 
+    companyId
+  );
 
   if (managerUserId) {
     db.prepare('INSERT OR IGNORE INTO user_services (user_id, service_id, company_id) VALUES (?, ?, ?)').run(String(managerUserId), id, companyId);
