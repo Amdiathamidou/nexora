@@ -928,7 +928,7 @@ mailRoutes.patch('/mails/:id/draft', requireAuth, requireCompanyScope, (req: Aut
   const user = req.user!;
   const companyId = user.companyId!;
   const mailId = String(req.params.id);
-  const { draftHtml, draftText } = req.body ?? {};
+  const { draftHtml, draftText, createVersion, versionStatus } = req.body ?? {};
 
   const ctx = loadMailActionContext(user, mailId, companyId);
   if (!ctx) {
@@ -951,17 +951,84 @@ mailRoutes.patch('/mails/:id/draft', requireAuth, requireCompanyScope, (req: Aut
     WHERE id = ? AND company_id = ?
   `).run(String(draftHtml || ''), String(draftText || ''), user.fullName, mailId, companyId);
 
+  let versionNumber: number | null = null;
+  if (createVersion) {
+    const maxV = db
+      .prepare('SELECT COALESCE(MAX(version_number), 0) as v FROM mail_draft_versions WHERE mail_id = ? AND company_id = ?')
+      .get(mailId, companyId) as { v: number };
+    versionNumber = (maxV?.v || 0) + 1;
+    db.prepare(`
+      INSERT INTO mail_draft_versions (id, mail_id, company_id, version_number, content_html, content_text, status, created_by, created_by_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      newId('ver'),
+      mailId,
+      companyId,
+      versionNumber,
+      String(draftHtml || ''),
+      String(draftText || ''),
+      String(versionStatus || 'BROUILLON'),
+      user.id,
+      user.fullName
+    );
+  }
+
   logAudit({
     companyId,
     userId: user.id,
     userName: user.fullName,
-    action: 'EDITION_DOCUMENT_PROJET',
+    action: createVersion ? 'NOUVELLE_VERSION_PROJET' : 'EDITION_DOCUMENT_PROJET',
     entityType: 'MAIL',
     entityId: mailId,
-    context: `Document de travail / projet édité par ${user.fullName} (${user.jobTitle})`,
+    context: createVersion
+      ? `Version v${versionNumber} du projet de réponse enregistrée par ${user.fullName}`
+      : `Document de travail / projet édité par ${user.fullName} (${user.jobTitle})`,
   });
 
-  res.json({ ok: true, updatedAt: new Date().toISOString() });
+  res.json({ ok: true, updatedAt: new Date().toISOString(), versionNumber });
+});
+
+// Optional AI writing assistant for draft responses (never auto-sends or auto-signs)
+mailRoutes.post('/mails/:id/ai-draft', requireAuth, requireCompanyScope, async (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const companyId = user.companyId!;
+  const mailId = String(req.params.id);
+  const { action, currentText } = req.body ?? {}; // 'GENERATE' | 'IMPROVE' | 'FIX_SPELLING' | 'SUMMARIZE' | 'FORMAL_TONE'
+
+  const ctx = loadMailActionContext(user, mailId, companyId);
+  if (!ctx) {
+    res.status(404).json({ error: 'Courrier introuvable.' });
+    return;
+  }
+
+  const mail = ctx.mail;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    // Fallback structured administrative template if Gemini key is not configured
+    const fallbackHtml = `<p>Monsieur / Madame,</p><p>Nous accusons bonne réception de votre correspondance référencée <strong>${mail.external_reference || mail.reference}</strong> relative à <em>« ${mail.subject} »</em>.</p><p>Après examen attentif de votre demande par nos services compétents, nous avons l'honneur de vous informer que votre dossier est en cours de traitement.</p><p>Nous vous prions d'agréer, Monsieur / Madame, l'expression de notre considération distinguée.</p>`;
+    res.json({ html: fallbackHtml, isFallback: true });
+    return;
+  }
+
+  try {
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey });
+    const promptMap: Record<string, string> = {
+      GENERATE: `Rédige un projet de réponse administrative formelle en français pour ce courrier entrant.\nObjet: ${mail.subject}\nExpéditeur: ${mail.sender_name} (${mail.sender_org})\nDescription/Résumé: ${mail.description}\nRéférence: ${mail.reference}\nRetourne uniquement du HTML propre (<p>, <strong>, <em>) sans balises markdown.`,
+      IMPROVE: `Améliore la formulation administrative et la clarté de ce texte en français tout en conservant le sens exact. Retourne uniquement du HTML propre (<p>, <strong>, <em>) sans balises markdown :\n\n${currentText || ''}`,
+      FIX_SPELLING: `Corrige uniquement les fautes d'orthographe, de grammaire et de ponctuation de ce texte en français. Retourne uniquement du HTML propre (<p>, <strong>, <em>) sans balises markdown :\n\n${currentText || ''}`,
+      FORMAL_TONE: `Adapte ce texte au ton d'une correspondance institutionnelle et protocolaire de haut niveau en français. Retourne uniquement du HTML propre (<p>, <strong>, <em>) sans balises markdown :\n\n${currentText || ''}`,
+      SUMMARIZE: `Résume ce texte de manière concise et administrative en français. Retourne uniquement du HTML propre (<p>, <ul>, <li>) sans balises markdown :\n\n${currentText || mail.description || ''}`,
+    };
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: promptMap[String(action || 'GENERATE')] || promptMap.GENERATE,
+    });
+    const rawHtml = (response.text || '').replace(/```html|```/g, '').trim();
+    res.json({ html: rawHtml, isFallback: false });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur assistance IA.' });
+  }
 });
 
 // Upload additional document (pj, draft response, final response, proof)
@@ -1398,13 +1465,17 @@ mailRoutes.post('/mails/:id/dispatch', requireAuth, requireCompanyScope, (req: A
   }
   const mail = ctx.mail;
 
-  const { dispatchMode, trackingRef, recipientDetails, notes } = req.body ?? {};
+  const { dispatchMode, trackingRef, recipientDetails, destinationAddress, shippingCost, shipmentStatus, proofDocumentId, notes } = req.body ?? {};
   const shipId = newId('shp');
+  const resolvedShipStatus = shipmentStatus || 'EXPEDIE';
 
   db.transaction(() => {
     db.prepare(`
-      INSERT INTO shipments (id, mail_id, company_id, dispatch_mode, tracking_ref, recipient_details, dispatched_by, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO shipments (
+        id, mail_id, company_id, dispatch_mode, tracking_ref, recipient_details,
+        destination_address, shipping_cost, shipment_status, proof_document_id, dispatched_by, notes, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(
       shipId,
       mailId,
@@ -1412,15 +1483,19 @@ mailRoutes.post('/mails/:id/dispatch', requireAuth, requireCompanyScope, (req: A
       dispatchMode || 'COURSIER',
       trackingRef || `EXP-${mail.reference}`,
       recipientDetails || '',
+      destinationAddress || '',
+      Number(shippingCost || 0),
+      resolvedShipStatus,
+      proofDocumentId || null,
       user.id,
       notes || ''
     );
 
     db.prepare(`
       UPDATE mails
-      SET shipping_status = 'EXPEDIE', mail_status = 'CLOTURE', updated_at = datetime('now')
+      SET shipping_status = ?, mail_status = 'CLOTURE', updated_at = datetime('now')
       WHERE id = ? AND company_id = ?
-    `).run(mailId, companyId);
+    `).run(resolvedShipStatus === 'LIVRE' ? 'LIVRE' : 'EXPEDIE', mailId, companyId);
   })();
 
   logAudit({
@@ -1459,7 +1534,15 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
   // Non-negotiable rule check: incoming mail cannot bypass Secrétariat return!
   if (mail.direction === 'ENTRANT' && !['RETOUR_SECRETARIAT', 'CLOTURE'].includes(mail.mail_status)) {
     res.status(400).json({
-      error: 'Règle métier : aucun courrier entrant ne peut être archivé sans passer par le retour obligatoire au Secrétariat et le contrôle final.',
+      error: 'Archivage impossible : aucun courrier entrant ne peut être archivé sans passer par le retour obligatoire au Secrétariat et le contrôle final.',
+    });
+    return;
+  }
+
+  // Non-negotiable rule check: if a response is required, it must be dispatched first!
+  if (mail.requires_response === 1 && mail.shipping_status === 'A_EXPEDIER') {
+    res.status(400).json({
+      error: 'Archivage impossible : ce courrier nécessite une réponse et doit être expédié avec preuve avant son archivage définitif.',
     });
     return;
   }
@@ -1476,9 +1559,10 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
   db.transaction(() => {
     db.prepare(`
       UPDATE mails
-      SET mail_status = 'ARCHIVE', workflow_status = 'TERMINE', archive_status = 'ARCHIVE', updated_at = datetime('now')
+      SET mail_status = 'ARCHIVE', workflow_status = 'TERMINE', archive_status = 'ARCHIVE',
+          archived_at = datetime('now'), archived_by = ?, updated_at = datetime('now')
       WHERE id = ? AND company_id = ?
-    `).run(mailId, companyId);
+    `).run(user.id, mailId, companyId);
 
     db.prepare(`
       UPDATE workflow_instances SET status = 'TERMINE', completed_at = COALESCE(completed_at, datetime('now'))
@@ -1562,4 +1646,55 @@ mailRoutes.post('/mails/:id/archive', requireAuth, requireCompanyScope, (req: Au
   });
 
   res.json({ ok: true, templateId: createdTemplateId });
+});
+
+// Controlled unarchiving with mandatory reason and audit trail
+mailRoutes.post('/mails/:id/unarchive', requireAuth, requireCompanyScope, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const companyId = user.companyId!;
+  const mailId = String(req.params.id);
+  const { reason } = req.body ?? {};
+
+  if (!user.isSecretariat && user.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Seul le Secrétariat ou l’Administrateur peut désarchiver un dossier.' });
+    return;
+  }
+
+  if (!reason || !String(reason).trim()) {
+    res.status(400).json({ error: 'Le motif de désarchivage est obligatoire.' });
+    return;
+  }
+
+  const mail = db
+    .prepare('SELECT id, reference, archive_status FROM mails WHERE id = ? AND company_id = ?')
+    .get(mailId, companyId) as { id: string; reference: string; archive_status: string } | undefined;
+
+  if (!mail) {
+    res.status(404).json({ error: 'Courrier introuvable.' });
+    return;
+  }
+
+  db.prepare(`
+    UPDATE mails
+    SET archive_status = 'NON_ARCHIVE',
+        mail_status = 'RETOUR_SECRETARIAT',
+        unarchived_at = datetime('now'),
+        unarchived_by = ?,
+        unarchive_reason = ?,
+        updated_at = datetime('now')
+    WHERE id = ? AND company_id = ?
+  `).run(user.id, String(reason).trim(), mailId, companyId);
+
+  logAudit({
+    companyId,
+    userId: user.id,
+    userName: user.fullName,
+    action: 'DESARCHIVAGE_COURRIER',
+    entityType: 'MAIL',
+    entityId: mailId,
+    newValue: { reason: String(reason).trim() },
+    context: `Dossier ${mail.reference} désarchivé par ${user.fullName}. Motif : ${String(reason).trim()}`,
+  });
+
+  res.json({ ok: true });
 });

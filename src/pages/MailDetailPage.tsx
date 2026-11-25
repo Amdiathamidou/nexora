@@ -45,6 +45,7 @@ import {
 import { apiFetch, downloadAuthenticatedFile, getAuthToken } from '../api/client.ts';
 import type { AppPage } from '../components/common/AppShell.tsx';
 import { PriorityLabel, StatusLabel } from '../components/common/StatusBadge.tsx';
+import { WordDocumentEditor } from '../components/editor/WordDocumentEditor.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import type {
   CircuitItem,
@@ -2084,290 +2085,52 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           </section>
 
           {/* Draft Response Editor */}
-          {/* Projet de Réponse / Document de travail — Vrai Éditeur Word Pro avec Insertion de Signature */}
           {(mail.direction === 'ENTRANT' || (mail as unknown as { requires_response?: number }).requires_response === 1) && (
-            <section
-              className={`rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-all ${
-                isEditorFullscreen
-                  ? 'fixed inset-4 z-50 shadow-2xl flex flex-col p-6 overflow-hidden'
-                  : 'p-6 space-y-4'
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 flex items-center justify-center font-bold">
-                    <FileEdit className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>Éditeur Word — Projet de Réponse &amp; Document Officiel</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wider">
-                        Style Word
-                      </span>
-                    </h2>
-                    <p className="text-[11px] text-slate-500">
-                      Rédigez, soulignez, structurez la lettre de réponse et insérez votre signature numérique.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {draftSaved && (
-                    <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded">
-                      <CheckCircle2 className="w-3 h-3" /> Enregistré
-                    </span>
-                  )}
-                  {draftSaving && (
-                    <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400 animate-pulse bg-blue-50 px-2 py-1 rounded">
-                      Sauvegarde en cours…
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={exportDraftAsDoc}
-                    title="Télécharger au format Word (.doc)"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
-                  >
-                    <FileDown className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Exporter Word</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={printDraftDoc}
-                    title="Imprimer ou enregistrer en PDF"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Imprimer</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsEditorFullscreen(!isEditorFullscreen)}
-                    title={isEditorFullscreen ? 'Réduire' : 'Plein écran'}
-                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
-                  >
-                    {isEditorFullscreen ? <Minimize2 className="w-4 h-4 text-blue-600" /> : <Maximize2 className="w-4 h-4 text-slate-600" />}
-                  </button>
-                </div>
-              </div>
-
-              {actionLock.canAct && (
-                <div className="space-y-2">
-                  {/* Word Toolbar Row 1: Formatting & Styles */}
-                  <div className="flex flex-wrap items-center gap-1 p-2 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
-                    {/* Undo / Redo */}
-                    <button type="button" onClick={() => execDraftCommand('undo')} title="Annuler" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <Undo className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('redo')} title="Rétablir" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <Redo className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-
-                    {/* Font family */}
-                    <select
-                      value={editorFontFamily}
-                      onChange={(e) => {
-                        setEditorFontFamily(e.target.value);
-                        execDraftCommand('fontName', e.target.value);
-                      }}
-                      className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-medium"
-                    >
-                      <option value="Arial, sans-serif">Arial</option>
-                      <option value="'Times New Roman', serif">Times New Roman</option>
-                      <option value="'Plus Jakarta Sans', sans-serif">Jakarta Sans</option>
-                      <option value="'JetBrains Mono', monospace">Courrier / Mono</option>
-                    </select>
-
-                    {/* Font size */}
-                    <select
-                      value={editorFontSize}
-                      onChange={(e) => {
-                        setEditorFontSize(e.target.value);
-                        execDraftCommand('fontSize', e.target.value);
-                      }}
-                      className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-medium"
-                    >
-                      <option value="1">10 pt (Petit)</option>
-                      <option value="2">11 pt</option>
-                      <option value="3">12 pt (Standard)</option>
-                      <option value="4">14 pt (Sous-titre)</option>
-                      <option value="5">18 pt (Titre)</option>
-                      <option value="6">24 pt (Grand)</option>
-                    </select>
-
-                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-
-                    {/* Style buttons */}
-                    <button type="button" onClick={() => execDraftCommand('bold')} title="Gras (Ctrl+B)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 font-bold">
-                      <Bold className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('italic')} title="Italique (Ctrl+I)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <Italic className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('underline')} title="Souligné (Ctrl+U)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 underline font-bold bg-white/60 dark:bg-slate-700/60">
-                      <Underline className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('strikeThrough')} title="Barré" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 line-through text-xs font-bold">
-                      S
-                    </button>
-
-                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-
-                    {/* Alignments */}
-                    <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner à gauche" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <AlignLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('justifyCenter')} title="Centrer" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <AlignCenter className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner à droite" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <AlignRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('justifyFull')} title="Justifier" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <AlignJustify className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-
-                    {/* Lists */}
-                    <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste à puces" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <List className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numérotée" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
-                      <ListOrdered className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Word Toolbar Row 2: Insérer des blocs administratifs & Signatures */}
-                  <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs">
-                    <span className="font-extrabold uppercase tracking-wider text-[10px] text-blue-800 dark:text-blue-300">
-                      Insérer dans la lettre :
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={insertHeaderTemplate}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 font-bold text-slate-800 dark:text-slate-200 hover:bg-blue-100/50"
-                    >
-                      <Sparkles className="w-3 h-3 text-blue-600" />
-                      <span>En-tête officiel</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={insertDateInDraft}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 font-bold text-slate-800 dark:text-slate-200 hover:bg-blue-100/50"
-                    >
-                      <Calendar className="w-3 h-3 text-slate-600" />
-                      <span>Date du jour</span>
-                    </button>
-
-                    {/* Insertion de Signature du profil */}
-                    {data?.currentUserSignAssets?.signatureImage && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          insertSignatureInDraft(
-                            data.currentUserSignAssets!.signatureImage,
-                            user?.fullName || 'Le Responsable',
-                            user?.role === 'PRESIDENT' ? 'Le Président Directeur Général' : 'Le Responsable de Service'
-                          )
-                        }
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm"
-                      >
-                        <PenTool className="w-3 h-3" />
-                        <span>Insérer ma signature numérique</span>
-                      </button>
-                    )}
-
-                    {/* Signature manuscrite à la main directement dans l'éditeur Word */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraftSigHasDrawn(false);
-                        setShowDraftHandSignModal(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold shadow-sm"
-                    >
-                      <PenTool className="w-3 h-3" />
-                      <span>Signer à la main &amp; Insérer</span>
-                    </button>
-
-                    {/* Insertion du cachet d'entreprise */}
-                    {(data?.currentUserSignAssets?.stampImage || data?.currentUserSignAssets?.companyStampImage) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const stampUrl = data.currentUserSignAssets?.stampImage || data.currentUserSignAssets?.companyStampImage;
-                          if (!stampUrl) return;
-                          const stampHtml = `<img src="${stampUrl}" alt="Cachet officiel" style="max-height: 90px; max-width: 140px; display: inline-block; vertical-align: middle; margin-left: 15px;" />`;
-                          document.execCommand('insertHTML', false, stampHtml);
-                          handleDraftInput();
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50"
-                      >
-                        <Stamp className="w-3 h-3 text-indigo-600" />
-                        <span>Insérer le cachet officiel</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Document Page Canvas (simulant une vraie feuille A4 Word) */}
-              <div
-                className={`w-full overflow-y-auto bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 rounded-xl flex justify-center ${
-                  isEditorFullscreen ? 'flex-1' : 'min-h-[420px] max-h-[640px]'
-                }`}
-              >
-                <div
-                  ref={draftEditorRef}
-                  contentEditable={actionLock.canAct}
-                  suppressContentEditableWarning
-                  onInput={handleDraftInput}
-                  style={{ fontFamily: editorFontFamily, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
-                  className={`w-full max-w-[800px] min-h-[500px] p-8 sm:p-12 bg-white dark:bg-slate-900 shadow-md border border-slate-300 dark:border-slate-700 rounded-sm text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 break-words overflow-x-hidden ${
-                    !actionLock.canAct ? 'opacity-85 cursor-not-allowed' : ''
-                  }`}
-                  dangerouslySetInnerHTML={{ __html: draftHtml }}
-                />
-              </div>
-
-              {/* Editor Footer: Save & Status */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  {actionLock.canAct ? (
-                    <button
-                      type="button"
-                      onClick={handleSaveDraft}
-                      disabled={draftSaving}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-colors shadow-sm disabled:opacity-50"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>{draftSaving ? 'Sauvegarde…' : 'Sauvegarder le projet de réponse'}</span>
-                    </button>
-                  ) : (
-                    <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                      🔒 Lecture seule : Ce dossier est actuellement en cours de traitement chez un autre intervenant.
-                    </p>
-                  )}
-                </div>
-
-                {(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by && (
-                  <p className="text-[11px] text-slate-500 text-right">
-                    Dernière modification par{' '}
-                    <span className="font-bold">{(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}</span>
-                    {' · '}
-                    {((mail as unknown as { draft_response_updated_at?: string }).draft_response_updated_at || '').slice(0, 16)}
-                  </p>
-                )}
-              </div>
-            </section>
+            <WordDocumentEditor
+              mailId={mail.id}
+              mailReference={mail.reference}
+              mailSubject={mail.subject}
+              mailSender={mail.sender_org || mail.sender_name || ''}
+              mailRecipient={mail.recipient_name || mail.recipient_org || ''}
+              companyName={company?.legal_name}
+              companyTagline={company?.tagline}
+              companyAddress={company?.address}
+              companyPhone={company?.phone}
+              companyLogoUrl={company?.logo_url}
+              initialHtml={draftHtml}
+              canAct={actionLock.canAct}
+              userFullName={user?.fullName || 'Le Responsable'}
+              userTitle={user?.role === 'PRESIDENT' ? 'Le Président Directeur Général' : 'Le Responsable de Service'}
+              savedSignatureUrl={data?.currentUserSignAssets?.signatureImage}
+              savedStampUrl={effectiveSavedStamp}
+              onChangeHtml={(html, text) => {
+                setDraftHtml(html);
+                if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+                draftSaveTimer.current = setTimeout(() => saveDraftToServer(html, text), 1500);
+              }}
+              onSaveManual={async (createVersion) => {
+                setDraftSaving(true);
+                try {
+                  await apiFetch(/api/mails//draft, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ draftHtml, draftText: draftHtml.replace(/<[^>]*>/g, ' '), createVersion }),
+                  });
+                  setDraftSaved(true);
+                  setTimeout(() => setDraftSaved(false), 3000);
+                  if (createVersion) setFeedback('Nouvelle version du projet de réponse enregistrée.');
+                } finally {
+                  setDraftSaving(false);
+                }
+              }}
+              onOpenHandSign={() => {
+                setDraftSigHasDrawn(false);
+                setShowDraftHandSignModal(true);
+              }}
+              saving={draftSaving}
+              saved={draftSaved}
+              lastUpdatedBy={(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}
+              lastUpdatedAt={(mail as unknown as { draft_response_updated_at?: string }).draft_response_updated_at}
+            />
           )}
         </div>
 

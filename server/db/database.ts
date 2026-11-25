@@ -516,4 +516,34 @@ export function initSchema(): void {
   safeAddCol('mails', "draft_response_text TEXT DEFAULT ''");
   safeAddCol('mails', "draft_response_updated_by TEXT DEFAULT NULL");
   safeAddCol('mails', "draft_response_updated_at TEXT DEFAULT NULL");
+  safeAddCol('mails', "archived_at TEXT DEFAULT NULL");
+  safeAddCol('mails', "archived_by TEXT DEFAULT NULL");
+  safeAddCol('mails', "unarchived_at TEXT DEFAULT NULL");
+  safeAddCol('mails', "unarchived_by TEXT DEFAULT NULL");
+  safeAddCol('mails', "unarchive_reason TEXT DEFAULT ''");
+
+  safeAddCol('shipments', "destination_address TEXT DEFAULT ''");
+  safeAddCol('shipments', "shipping_cost REAL DEFAULT 0");
+  safeAddCol('shipments', "shipment_status TEXT DEFAULT 'EXPEDIE'");
+  safeAddCol('shipments', "proof_document_id TEXT DEFAULT NULL");
+  safeAddCol('shipments', "updated_at TEXT DEFAULT NULL");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mail_draft_versions (
+      id TEXT PRIMARY KEY,
+      mail_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL DEFAULT 1,
+      content_html TEXT NOT NULL DEFAULT '',
+      content_text TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'BROUILLON',
+      created_by TEXT DEFAULT NULL,
+      created_by_name TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      locked_at TEXT DEFAULT NULL,
+      FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_draft_versions_mail ON mail_draft_versions(mail_id, company_id, version_number);
+  `);
 }

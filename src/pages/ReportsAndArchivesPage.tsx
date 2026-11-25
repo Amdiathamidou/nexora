@@ -154,17 +154,49 @@ export function ReportsPage() {
 export function ArchivesPage({ onNavigate }: { onNavigate: (page: AppPage, mailId?: string) => void }) {
   const [mails, setMails] = useState<MailItem[]>([]);
   const [yearFilter, setYearFilter] = useState('ALL');
+  const [directionFilter, setDirectionFilter] = useState('ALL');
   const [q, setQ] = useState('');
+  const [unarchiveTarget, setUnarchiveTarget] = useState<MailItem | null>(null);
+  const [unarchiveReason, setUnarchiveReason] = useState('');
+  const [unarchiveError, setUnarchiveError] = useState('');
 
-  useEffect(() => {
+  const loadArchived = () => {
     const params = new URLSearchParams({ filter: 'archived' });
     if (q.trim()) params.set('q', q.trim());
     apiFetch<{ mails: MailItem[] }>(`/api/mails?${params.toString()}`)
       .then((d) => setMails(d.mails))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadArchived();
   }, [q]);
 
-  const filtered = mails.filter((m) => yearFilter === 'ALL' || m.received_at.startsWith(yearFilter));
+  const filtered = mails.filter((m) => {
+    const matchYear = yearFilter === 'ALL' || m.received_at.startsWith(yearFilter);
+    const matchDir = directionFilter === 'ALL' || m.direction === directionFilter;
+    return matchYear && matchDir;
+  });
+
+  const handleUnarchive = async () => {
+    if (!unarchiveTarget) return;
+    if (!unarchiveReason.trim()) {
+      setUnarchiveError('Le motif de désarchivage est obligatoire.');
+      return;
+    }
+    setUnarchiveError('');
+    try {
+      await apiFetch(`/api/mails/${unarchiveTarget.id}/unarchive`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: unarchiveReason.trim() }),
+      });
+      setUnarchiveTarget(null);
+      setUnarchiveReason('');
+      loadArchived();
+    } catch (e) {
+      setUnarchiveError(e instanceof Error ? e.message : 'Erreur lors du désarchivage');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -172,17 +204,27 @@ export function ArchivesPage({ onNavigate }: { onNavigate: (page: AppPage, mailI
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">Archives institutionnelles</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Classement des courriers clôturés par année, catégorie, service et référence.
+            Classement des courriers clôturés par année, type, service et référence.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Référence, objet..."
+            placeholder="Référence, objet, expéditeur..."
             className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
           />
+          <select
+            value={directionFilter}
+            onChange={(e) => setDirectionFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+          >
+            <option value="ALL">Tous types</option>
+            <option value="ENTRANT">Entrant</option>
+            <option value="SORTANT">Sortant</option>
+            <option value="INTERNE">Interne</option>
+          </select>
           <select
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
@@ -203,10 +245,12 @@ export function ArchivesPage({ onNavigate }: { onNavigate: (page: AppPage, mailI
           </div>
         ) : (
           filtered.map((m) => (
-            <div key={m.id} className="p-4 flex items-center justify-between gap-4">
-              <div className="min-w-0">
+            <div key={m.id} className="p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{m.reference}</span>
+                  <span>·</span>
+                  <span>{m.direction}</span>
                   <span>·</span>
                   <span>{m.category}</span>
                   <span>·</span>
@@ -217,17 +261,69 @@ export function ArchivesPage({ onNavigate }: { onNavigate: (page: AppPage, mailI
                   {m.service_name || 'Secrétariat'} · Archivé le {m.updated_at.slice(0, 10)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('mail-detail', m.id)}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium shrink-0"
-              >
-                Consulter
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('mail-detail', m.id)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Consulter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnarchiveTarget(m);
+                    setUnarchiveReason('');
+                    setUnarchiveError('');
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                >
+                  Désarchiver
+                </button>
+              </div>
             </div>
           ))
         )}
       </div>
+
+      {unarchiveTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+              Désarchiver le dossier {unarchiveTarget.reference}
+            </h3>
+            <p className="text-xs text-slate-500">
+              Cette action est journalisée et remettra le dossier au Secrétariat pour reprise. Veuillez indiquer le motif obligatoire.
+            </p>
+            {unarchiveError && (
+              <p className="text-xs text-red-600 font-medium">{unarchiveError}</p>
+            )}
+            <textarea
+              rows={3}
+              value={unarchiveReason}
+              onChange={(e) => setUnarchiveReason(e.target.value)}
+              placeholder="Motif du désarchivage..."
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setUnarchiveTarget(null)}
+                className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleUnarchive}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+              >
+                Confirmer le désarchivage
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
