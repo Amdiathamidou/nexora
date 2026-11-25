@@ -1,27 +1,43 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   Archive,
   ArrowLeft,
   Bold,
+  Calendar,
   CheckCircle2,
+  Copy,
   Download,
   Eraser,
   Eye,
   EyeOff,
+  FileDown,
+  FileEdit,
   FileText,
+  Heading1,
+  Heading2,
   Italic,
+  List,
+  ListOrdered,
   Lock,
   MailCheck,
+  Maximize2,
   MessageSquarePlus,
+  Minimize2,
   PenTool,
+  Printer,
+  Redo,
   Save,
   Send,
   ShieldAlert,
+  Sparkles,
   Stamp,
+  Table,
   Underline,
+  Undo,
   Upload,
   UserCheck,
   X,
@@ -169,6 +185,9 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [draftHtml, setDraftHtml] = useState('');
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
+  const [editorFontSize, setEditorFontSize] = useState('3');
+  const [editorFontFamily, setEditorFontFamily] = useState('Arial, sans-serif');
   const draftEditorRef = useRef<HTMLDivElement | null>(null);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -591,6 +610,107 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const execDraftCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     draftEditorRef.current?.focus();
+  };
+
+  const insertSignatureInDraft = (sigUrl: string, name: string, title?: string) => {
+    const signatureBlock = `
+      <div style="margin-top: 30px; margin-bottom: 20px; page-break-inside: avoid; display: inline-block; min-width: 240px; text-align: left;">
+        <p style="font-size: 13px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">${title || 'Le Responsable'}</p>
+        <img src="${sigUrl}" alt="Signature" style="max-height: 80px; max-width: 220px; object-fit: contain; display: block; margin-bottom: 6px;" />
+        <p style="font-size: 12px; font-weight: 600; color: #334155; margin: 0;">${name}</p>
+      </div>
+    `;
+    document.execCommand('insertHTML', false, signatureBlock);
+    draftEditorRef.current?.focus();
+    handleDraftInput();
+  };
+
+  const insertDateInDraft = () => {
+    const today = new Date().toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const dateBlock = `<p style="text-align: right; margin-bottom: 24px; font-size: 13px; color: #475569;">Fait le ${today}</p>`;
+    document.execCommand('insertHTML', false, dateBlock);
+    draftEditorRef.current?.focus();
+    handleDraftInput();
+  };
+
+  const insertHeaderTemplate = () => {
+    const headerBlock = `
+      <div style="border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px; font-family: Arial, sans-serif;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="vertical-align: top; width: 60%;">
+              <p style="font-size: 15px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a;">${user?.companyId ? 'RÉPUBLIQUE DU BÉNIN' : 'ORGANISATION'}</p>
+              <p style="font-size: 12px; margin: 2px 0 0 0; color: #475569; font-weight: 600;">DIRECTION GÉNÉRALE / SECRÉTARIAT</p>
+              <p style="font-size: 11px; margin: 2px 0 0 0; color: #64748b;">Réf : ${mail?.reference || 'NEXORA-REP'}</p>
+            </td>
+            <td style="vertical-align: top; text-align: right; width: 40%;">
+              <p style="font-size: 12px; margin: 0; color: #475569;">Le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <p style="font-size: 13px; font-weight: bold; margin: 0 0 8px 0;"><strong>À l'attention de :</strong> ${mail?.sender_name || 'Destinataire'} / ${mail?.sender_org || ''}</p>
+        <p style="font-size: 13px; font-weight: bold; margin: 0;"><strong>Objet :</strong> Réponse à votre correspondance — ${mail?.subject || ''}</p>
+      </div>
+      <p style="font-size: 13px; line-height: 1.6; margin-top: 16px;">Monsieur / Madame,</p>
+      <p style="font-size: 13px; line-height: 1.6;">Nous accusons bonne réception de votre lettre citée en référence...</p>
+    `;
+    document.execCommand('insertHTML', false, headerBlock);
+    draftEditorRef.current?.focus();
+    handleDraftInput();
+  };
+
+  const exportDraftAsDoc = () => {
+    const content = draftEditorRef.current?.innerHTML || draftHtml;
+    const header = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>Projet de Réponse - ${mail?.reference}</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; padding: 2cm; }
+          table { width: 100%; border-collapse: collapse; }
+        </style>
+      </head>
+      <body>
+    `;
+    const footer = '</body></html>';
+    const sourceHTML = header + content + footer;
+    const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Projet_Reponse_${mail?.reference || 'Courrier'}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const printDraftDoc = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Impression - ${mail?.reference}</title>
+          <style>
+            @page { size: A4; margin: 20mm; }
+            body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6; color: #000; }
+            img { max-height: 90px; }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          ${draftEditorRef.current?.innerHTML || draftHtml}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const handleDraftInput = () => {
@@ -1847,96 +1967,271 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           </section>
 
           {/* Draft Response Editor */}
+          {/* Projet de Réponse / Document de travail — Vrai Éditeur Word Pro avec Insertion de Signature */}
           {(mail.direction === 'ENTRANT' || (mail as unknown as { requires_response?: number }).requires_response === 1) && (
-            <section className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-display text-base font-bold">📝 Projet de réponse / Document de travail</h2>
-                {draftSaved && (
-                  <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Sauvegardé
-                  </span>
-                )}
-                {draftSaving && (
-                  <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400">Sauvegarde en cours…</span>
-                )}
+            <section
+              className={`rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-all ${
+                isEditorFullscreen
+                  ? 'fixed inset-4 z-50 shadow-2xl flex flex-col p-6 overflow-hidden'
+                  : 'p-6 space-y-4'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 flex items-center justify-center font-bold">
+                    <FileEdit className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Éditeur Word — Projet de Réponse &amp; Document Officiel</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wider">
+                        Style Word
+                      </span>
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Rédigez, soulignez, structurez la lettre de réponse et insérez votre signature numérique.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {draftSaved && (
+                    <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded">
+                      <CheckCircle2 className="w-3 h-3" /> Enregistré
+                    </span>
+                  )}
+                  {draftSaving && (
+                    <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400 animate-pulse bg-blue-50 px-2 py-1 rounded">
+                      Sauvegarde en cours…
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={exportDraftAsDoc}
+                    title="Télécharger au format Word (.doc)"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Exporter Word</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={printDraftDoc}
+                    title="Imprimer ou enregistrer en PDF"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Imprimer</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorFullscreen(!isEditorFullscreen)}
+                    title={isEditorFullscreen ? 'Réduire' : 'Plein écran'}
+                    className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    {isEditorFullscreen ? <Minimize2 className="w-4 h-4 text-blue-600" /> : <Maximize2 className="w-4 h-4 text-slate-600" />}
+                  </button>
+                </div>
               </div>
 
               {actionLock.canAct && (
-                <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <button type="button" onClick={() => execDraftCommand('bold')} title="Gras" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <Bold className="w-4 h-4" />
-                  </button>
-                  <button type="button" onClick={() => execDraftCommand('italic')} title="Italique" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <Italic className="w-4 h-4" />
-                  </button>
-                  <button type="button" onClick={() => execDraftCommand('underline')} title="Souligné" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <Underline className="w-4 h-4" />
-                  </button>
-                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-                  <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner à gauche" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <AlignLeft className="w-4 h-4" />
-                  </button>
-                  <button type="button" onClick={() => execDraftCommand('justifyCenter')} title="Centrer" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <AlignCenter className="w-4 h-4" />
-                  </button>
-                  <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner à droite" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <AlignRight className="w-4 h-4" />
-                  </button>
-                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-                  <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste à puces" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
-                    â€¢
-                  </button>
-                  <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numérotée" className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">
-                    1.
-                  </button>
-                  <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-                  <select
-                    onChange={(e) => { execDraftCommand('fontSize', e.target.value); e.target.value = ''; }}
-                    className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Taille</option>
-                    <option value="1">Petit</option>
-                    <option value="3">Normal</option>
-                    <option value="5">Grand</option>
-                    <option value="7">Très grand</option>
-                  </select>
+                <div className="space-y-2">
+                  {/* Word Toolbar Row 1: Formatting & Styles */}
+                  <div className="flex flex-wrap items-center gap-1 p-2 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
+                    {/* Undo / Redo */}
+                    <button type="button" onClick={() => execDraftCommand('undo')} title="Annuler" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <Undo className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('redo')} title="Rétablir" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <Redo className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+
+                    {/* Font family */}
+                    <select
+                      value={editorFontFamily}
+                      onChange={(e) => {
+                        setEditorFontFamily(e.target.value);
+                        execDraftCommand('fontName', e.target.value);
+                      }}
+                      className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-medium"
+                    >
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="'Plus Jakarta Sans', sans-serif">Jakarta Sans</option>
+                      <option value="'JetBrains Mono', monospace">Courrier / Mono</option>
+                    </select>
+
+                    {/* Font size */}
+                    <select
+                      value={editorFontSize}
+                      onChange={(e) => {
+                        setEditorFontSize(e.target.value);
+                        execDraftCommand('fontSize', e.target.value);
+                      }}
+                      className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-medium"
+                    >
+                      <option value="1">10 pt (Petit)</option>
+                      <option value="2">11 pt</option>
+                      <option value="3">12 pt (Standard)</option>
+                      <option value="4">14 pt (Sous-titre)</option>
+                      <option value="5">18 pt (Titre)</option>
+                      <option value="6">24 pt (Grand)</option>
+                    </select>
+
+                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+
+                    {/* Style buttons */}
+                    <button type="button" onClick={() => execDraftCommand('bold')} title="Gras (Ctrl+B)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 font-bold">
+                      <Bold className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('italic')} title="Italique (Ctrl+I)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <Italic className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('underline')} title="Souligné (Ctrl+U)" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 underline font-bold bg-white/60 dark:bg-slate-700/60">
+                      <Underline className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('strikeThrough')} title="Barré" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700 line-through text-xs font-bold">
+                      S
+                    </button>
+
+                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+
+                    {/* Alignments */}
+                    <button type="button" onClick={() => execDraftCommand('justifyLeft')} title="Aligner à gauche" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <AlignLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('justifyCenter')} title="Centrer" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <AlignCenter className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('justifyRight')} title="Aligner à droite" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <AlignRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('justifyFull')} title="Justifier" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <AlignJustify className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
+
+                    {/* Lists */}
+                    <button type="button" onClick={() => execDraftCommand('insertUnorderedList')} title="Liste à puces" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => execDraftCommand('insertOrderedList')} title="Liste numérotée" className="p-1.5 rounded hover:bg-white dark:hover:bg-slate-700">
+                      <ListOrdered className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Word Toolbar Row 2: Insérer des blocs administratifs & Signatures */}
+                  <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs">
+                    <span className="font-extrabold uppercase tracking-wider text-[10px] text-blue-800 dark:text-blue-300">
+                      Insérer dans la lettre :
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={insertHeaderTemplate}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 font-bold text-slate-800 dark:text-slate-200 hover:bg-blue-100/50"
+                    >
+                      <Sparkles className="w-3 h-3 text-blue-600" />
+                      <span>En-tête officiel</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={insertDateInDraft}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 font-bold text-slate-800 dark:text-slate-200 hover:bg-blue-100/50"
+                    >
+                      <Calendar className="w-3 h-3 text-slate-600" />
+                      <span>Date du jour</span>
+                    </button>
+
+                    {/* Insertion de Signature du profil */}
+                    {data?.currentUserSignAssets?.signatureImage && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          insertSignatureInDraft(
+                            data.currentUserSignAssets!.signatureImage,
+                            user?.fullName || 'Le Responsable',
+                            user?.role === 'PRESIDENT' ? 'Le Président Directeur Général' : 'Le Responsable de Service'
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm"
+                      >
+                        <PenTool className="w-3 h-3" />
+                        <span>Insérer ma signature numérique</span>
+                      </button>
+                    )}
+
+                    {/* Insertion du cachet d'entreprise */}
+                    {(data?.currentUserSignAssets?.stampImage || data?.currentUserSignAssets?.companyStampImage) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const stampUrl = data.currentUserSignAssets?.stampImage || data.currentUserSignAssets?.companyStampImage;
+                          if (!stampUrl) return;
+                          const stampHtml = `<img src="${stampUrl}" alt="Cachet officiel" style="max-height: 90px; max-width: 140px; display: inline-block; vertical-align: middle; margin-left: 15px;" />`;
+                          document.execCommand('insertHTML', false, stampHtml);
+                          handleDraftInput();
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50"
+                      >
+                        <Stamp className="w-3 h-3 text-indigo-600" />
+                        <span>Insérer le cachet officiel</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
+              {/* Document Page Canvas (simulant une vraie feuille A4 Word) */}
               <div
-                ref={draftEditorRef}
-                contentEditable={actionLock.canAct}
-                suppressContentEditableWarning
-                onInput={handleDraftInput}
-                className={`min-h-[300px] max-h-[600px] overflow-y-auto p-4 rounded-lg border ${
-                  actionLock.canAct
-                    ? 'border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
-                } bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none prose prose-sm dark:prose-invert max-w-none`}
-                dangerouslySetInnerHTML={{ __html: draftHtml }}
-              />
+                className={`w-full overflow-y-auto bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 rounded-xl flex justify-center ${
+                  isEditorFullscreen ? 'flex-1' : 'min-h-[420px] max-h-[640px]'
+                }`}
+              >
+                <div
+                  ref={draftEditorRef}
+                  contentEditable={actionLock.canAct}
+                  suppressContentEditableWarning
+                  onInput={handleDraftInput}
+                  style={{ fontFamily: editorFontFamily }}
+                  className={`w-full max-w-[800px] min-h-[500px] p-8 sm:p-12 bg-white dark:bg-slate-900 shadow-md border border-slate-300 dark:border-slate-700 rounded-sm text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                    !actionLock.canAct ? 'opacity-85 cursor-not-allowed' : ''
+                  }`}
+                  dangerouslySetInnerHTML={{ __html: draftHtml }}
+                />
+              </div>
 
-              <div className="flex items-center justify-between gap-4">
-                {actionLock.canAct ? (
-                  <button
-                    type="button"
-                    onClick={handleSaveDraft}
-                    disabled={draftSaving}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>{draftSaving ? 'Sauvegarde…' : 'Sauvegarder le brouillon'}</span>
-                  </button>
-                ) : (
-                  <p className="text-[11px] text-slate-500">
-                    Édition désactivée — le dossier n&#39;est pas à votre niveau de traitement.
-                  </p>
-                )}
+              {/* Editor Footer: Save & Status */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  {actionLock.canAct ? (
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      disabled={draftSaving}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{draftSaving ? 'Sauvegarde…' : 'Sauvegarder le projet de réponse'}</span>
+                    </button>
+                  ) : (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                      🔒 Lecture seule : Ce dossier est actuellement en cours de traitement chez un autre intervenant.
+                    </p>
+                  )}
+                </div>
+
                 {(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by && (
                   <p className="text-[11px] text-slate-500 text-right">
                     Dernière modification par{' '}
-                    <span className="font-medium">{(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}</span>
+                    <span className="font-bold">{(mail as unknown as { draft_response_updated_by?: string }).draft_response_updated_by}</span>
                     {' · '}
                     {((mail as unknown as { draft_response_updated_at?: string }).draft_response_updated_at || '').slice(0, 16)}
                   </p>
