@@ -2111,7 +2111,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
               onSaveManual={async (createVersion) => {
                 setDraftSaving(true);
                 try {
-                  await apiFetch(/api/mails//draft, {
+                  await apiFetch(`/api/mails/${mailId}/draft`, {
                     method: 'PATCH',
                     body: JSON.stringify({ draftHtml, draftText: draftHtml.replace(/<[^>]*>/g, ' '), createVersion }),
                   });
