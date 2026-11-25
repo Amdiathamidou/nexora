@@ -409,6 +409,21 @@ export function computeMailActionLock(args: {
     canSign: false,
   });
 
+  if (mail.mail_status === 'CLOTURE' && mail.archive_status !== 'ARCHIVE' && (user.isSecretariat || user.role === 'ADMIN')) {
+    return {
+      canAct: true,
+      lockReason: '',
+      currentHolderLabel: 'Secrétariat Central (Prêt pour archivage)',
+      allowedActions: ['ARCHIVE'],
+      canOrient: false,
+      canAssignAgent: false,
+      canUploadDocument: true,
+      canDispatchOrArchive: true,
+      requiresPresidentSignature: false,
+      canSign: false,
+    };
+  }
+
   if (
     mail.archive_status === 'ARCHIVE' ||
     ['ARCHIVE', 'CLOTURE', 'REJETE', 'CLASSE_SANS_SUITE'].includes(mail.mail_status)

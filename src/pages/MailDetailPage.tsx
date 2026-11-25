@@ -805,6 +805,17 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
         </button>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
+          {(user?.isSecretariat || user?.role === 'ADMIN') && mail.archive_status !== 'ARCHIVE' && actionLock.canDispatchOrArchive && (
+            <button
+              type="button"
+              onClick={handleArchive}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold shadow-sm transition-colors text-xs"
+              title="Clôturer et archiver définitivement ce dossier"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Archiver le dossier</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowReceiptModal(true)}
