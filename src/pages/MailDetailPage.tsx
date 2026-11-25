@@ -129,7 +129,7 @@ interface MailDetailPageProps {
 }
 
 export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
-  const { user } = useAuth();
+  const { user, company } = useAuth();
   const [data, setData] = useState<MailDetailResponse | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [circuits, setCircuits] = useState<CircuitItem[]>([]);
@@ -179,6 +179,7 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
 
   // Archive with template modal state
   const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [saveAsTemplateChoice, setSaveAsTemplateChoice] = useState<'OUI' | 'NON'>('NON');
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateDescription, setNewTemplateDescription] = useState('');
@@ -790,6 +791,16 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
         </button>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setShowReceiptModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm transition-colors text-xs"
+            title="Générer et imprimer l'accusé de réception officiel"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Accusé de réception officiel</span>
+          </button>
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">|</span>
           <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{mail.reference}</span>
           <span aria-hidden="true">·</span>
           <span>{mail.direction}</span>
@@ -2551,6 +2562,180 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
               >
                 Confirmer l'archivage
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ACCUSÉ DE RÉCEPTION OFFICIEL (RÉCÉPISSÉ DE DÉPÔT / BORDEREAU) */}
+      {showReceiptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:p-0 print:bg-white print:static print:z-auto">
+          <div className="bg-white text-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col print:shadow-none print:w-full print:max-w-none print:rounded-none print:max-h-none border border-slate-200">
+            {/* Top action bar (hidden in print) */}
+            <div className="flex items-center justify-between p-4 bg-slate-100 border-b border-slate-200 print:hidden shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold text-sm">
+                  Accusé de réception &amp; Récépissé de dépôt — {mail.reference}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimer / Télécharger en PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReceiptModal(false)}
+                  className="p-2 rounded-lg hover:bg-slate-200 text-slate-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Body */}
+            <div id="nexora-receipt-document" className="p-8 sm:p-12 space-y-6 bg-white font-sans text-slate-900 overflow-y-auto">
+              {/* Header République / Organisation */}
+              <div className="border-b-2 border-slate-900 pb-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900">
+                      {company?.legal_name || 'RÉPUBLIQUE DU BÉNIN'}
+                    </h2>
+                    <p className="text-xs text-slate-600 font-semibold uppercase tracking-wide">
+                      {company?.activity_sector || 'Administration & Secrétariat Général'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {company?.address || 'Siège social officiel'} · Tél : {company?.phone || '+229 00 00 00 00'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-3 py-1 rounded bg-slate-900 text-white font-mono text-xs font-bold tracking-wider">
+                      {mail.reference}
+                    </span>
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      Date d'enregistrement : {mail.received_at.slice(0, 16)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Title Badge */}
+              <div className="text-center py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <h1 className="text-base sm:text-lg font-black uppercase tracking-wider text-emerald-900">
+                  ACCUSÉ DE RÉCEPTION &amp; DÉCHARGE OFFICIELLE DE COURRIER
+                </h1>
+                <p className="text-[11px] text-emerald-700 font-medium">
+                  Preuve de dépôt légale générée par le système certifié NEXORA
+                </p>
+              </div>
+
+              {/* Mail Meta Details Grid */}
+              <div className="grid grid-cols-2 gap-4 text-xs border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+                    Expéditeur (Déposant)
+                  </span>
+                  <p className="font-bold text-slate-900 text-sm mt-0.5">{mail.sender_org || mail.sender_name || 'Non spécifié'}</p>
+                  {mail.sender_org && mail.sender_name && (
+                    <p className="text-slate-600 text-xs">Représenté par : {mail.sender_name}</p>
+                  )}
+                  {mail.external_reference && (
+                    <p className="text-slate-500 text-[11px] mt-0.5 font-mono">Réf. d'origine : {mail.external_reference}</p>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+                    Destinataire
+                  </span>
+                  <p className="font-bold text-slate-900 text-sm mt-0.5">{mail.recipient_name || mail.recipient_org || company?.legal_name || 'Direction Générale'}</p>
+                  <p className="text-slate-600 text-xs">Service instructeur : {mail.service_name || 'Secrétariat Central'}</p>
+                  <p className="text-slate-500 text-[11px] mt-0.5 font-mono">Date du courrier : {mail.mail_date || mail.received_at.slice(0, 10)}</p>
+                </div>
+
+                <div className="col-span-2 pt-2 border-t border-slate-200">
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+                    Objet de la correspondance
+                  </span>
+                  <p className="font-bold text-slate-900 text-sm mt-0.5">{mail.subject}</p>
+                  {mail.description && (
+                    <p className="text-slate-600 text-xs mt-1 leading-relaxed bg-white p-2.5 rounded border border-slate-200">
+                      {mail.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-2 grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-[11px]">
+                  <div>
+                    <span className="text-slate-500 block font-medium">Type de courrier</span>
+                    <span className="font-bold text-slate-800">{mail.direction === 'ENTRANT' ? 'Courrier Arrivée' : 'Courrier Départ'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block font-medium">Priorité de traitement</span>
+                    <span className="font-bold text-slate-800">{mail.priority}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block font-medium">Documents annexés</span>
+                    <span className="font-bold text-slate-800">{documents.length} pièce(s) jointe(s)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Authentication & Digital Stamping Section */}
+              <div className="pt-2">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    <tr>
+                      <td className="w-1/2 p-4 align-top border border-slate-200 rounded-l-lg bg-white">
+                        <p className="text-[11px] font-bold text-slate-900 uppercase tracking-wider mb-2">
+                          Pour le Déposant / Coursier :
+                        </p>
+                        <p className="text-xs text-slate-600">Nom &amp; Prénom : ____________________</p>
+                        <p className="text-xs text-slate-600 mt-2">Signature :</p>
+                        <div className="h-16 mt-1 border-b border-dashed border-slate-300" />
+                      </td>
+                      <td className="w-1/2 p-4 align-top border border-slate-200 rounded-r-lg bg-emerald-50/20 text-center">
+                        <p className="text-[11px] font-bold text-slate-900 uppercase tracking-wider mb-1">
+                          Visa du Secrétariat &amp; Cachet d'arrivée :
+                        </p>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Enregistré par {mail.created_by_name || user?.fullName || 'Secrétariat Central'}
+                        </p>
+                        <div className="flex items-center justify-center gap-3 min-h-[70px]">
+                          {effectiveSavedStamp ? (
+                            <img
+                              src={effectiveSavedStamp}
+                              alt="Cachet d'arrivée"
+                              className="h-16 max-w-[120px] object-contain"
+                            />
+                          ) : (
+                            <div className="border-2 border-emerald-600 text-emerald-800 p-2 rounded text-[10px] font-black uppercase tracking-wider rotate-[-3deg]">
+                              NEXORA · COURRIER REÇU<br />LE {mail.received_at.slice(0, 10)}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Security Footer & Verification Seal */}
+              <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between text-[10px] text-slate-500">
+                <div>
+                  <p className="font-mono">Identifiant d'intégrité : {mail.id}</p>
+                  <p>Document officiel faisant foi de la remise du courrier physique ou numérique.</p>
+                </div>
+                <div className="text-right font-mono">
+                  Émis le {new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
