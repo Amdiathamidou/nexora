@@ -189,6 +189,10 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState('3');
   const [editorFontFamily, setEditorFontFamily] = useState('Arial, sans-serif');
+  const [showDraftHandSignModal, setShowDraftHandSignModal] = useState(false);
+  const [draftSigHasDrawn, setDraftSigHasDrawn] = useState(false);
+  const draftSigCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const draftSigDrawingRef = useRef(false);
   const draftEditorRef = useRef<HTMLDivElement | null>(null);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2281,6 +2285,19 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       </button>
                     )}
 
+                    {/* Signature manuscrite à la main directement dans l'éditeur Word */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftSigHasDrawn(false);
+                        setShowDraftHandSignModal(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold shadow-sm"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      <span>Signer à la main &amp; Insérer</span>
+                    </button>
+
                     {/* Insertion du cachet d'entreprise */}
                     {(data?.currentUserSignAssets?.stampImage || data?.currentUserSignAssets?.companyStampImage) && (
                       <button
@@ -2478,6 +2495,124 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
           </section>
         </div>
       </div>
+
+      {/* MODAL SIGNATURE MANUSCRITE À LA MAIN POUR L'ÉDITEUR WORD */}
+      {showDraftHandSignModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PenTool className="w-5 h-5 text-blue-600" />
+                <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                  Signer à la main (Insertion dans le document Word)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDraftHandSignModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Tracez votre signature avec la souris, le stylet ou le doigt ci-dessous, puis cliquez sur « Insérer dans la lettre ».
+            </p>
+
+            <div className="rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white overflow-hidden">
+              <canvas
+                ref={draftSigCanvasRef}
+                width={460}
+                height={180}
+                className="w-full h-44 touch-none cursor-crosshair bg-white"
+                onPointerDown={(e) => {
+                  const canvas = draftSigCanvasRef.current;
+                  if (!canvas) return;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return;
+                  canvas.setPointerCapture(e.pointerId);
+                  const rect = canvas.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+                  const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+                  ctx.strokeStyle = '#0f172a';
+                  ctx.lineWidth = 2.6;
+                  ctx.lineCap = 'round';
+                  ctx.lineJoin = 'round';
+                  ctx.beginPath();
+                  ctx.moveTo(x, y);
+                  draftSigDrawingRef.current = true;
+                  setDraftSigHasDrawn(true);
+                }}
+                onPointerMove={(e) => {
+                  if (!draftSigDrawingRef.current) return;
+                  const canvas = draftSigCanvasRef.current;
+                  if (!canvas) return;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return;
+                  const rect = canvas.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+                  const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+                  ctx.lineTo(x, y);
+                  ctx.stroke();
+                }}
+                onPointerUp={() => {
+                  draftSigDrawingRef.current = false;
+                }}
+                onPointerCancel={() => {
+                  draftSigDrawingRef.current = false;
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const canvas = draftSigCanvasRef.current;
+                  if (!canvas) return;
+                  const ctx = canvas.getContext('2d');
+                  ctx?.clearRect(0, 0, canvas.width, canvas.height);
+                  setDraftSigHasDrawn(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <Eraser className="w-3.5 h-3.5" />
+                <span>Effacer</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDraftHandSignModal(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={!draftSigHasDrawn}
+                  onClick={() => {
+                    const canvas = draftSigCanvasRef.current;
+                    if (!canvas || !draftSigHasDrawn) return;
+                    const dataUrl = canvas.toDataURL('image/png');
+                    insertSignatureInDraft(
+                      dataUrl,
+                      user?.fullName || 'Le Responsable',
+                      user?.role === 'PRESIDENT' ? 'Le Président Directeur Général' : 'Le Responsable de Service'
+                    );
+                    setShowDraftHandSignModal(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  <span>Insérer dans la lettre</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ARCHIVAGE AVEC PROPOSITION DE MODÈLE RÉUTILISABLE */}
       {showArchiveModal && (
