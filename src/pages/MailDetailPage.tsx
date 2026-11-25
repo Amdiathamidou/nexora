@@ -219,6 +219,13 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
       if (draftEditorRef.current && draftEditorRef.current.innerHTML !== serverDraft) {
         draftEditorRef.current.innerHTML = serverDraft;
       }
+
+      // Auto-preview original attached document
+      if (detail.documents && detail.documents.length > 0) {
+        const primaryDoc = detail.documents.find((d) => d.doc_kind === 'ORIGINAL') || detail.documents[0];
+        setPreviewDocId(primaryDoc.id);
+        loadDocBlob(primaryDoc.id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement du courrier');
     } finally {
@@ -829,39 +836,113 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
       )}
 
       {/* Header Metadata Card */}
-      <div className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+      <div className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <div className="space-y-2">
+          <div className="space-y-2 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                {mail.direction === 'ENTRANT' ? '📥 Courrier Entrant' : mail.direction === 'SORTANT' ? '📤 Courrier Sortant' : '🔄 Courrier Interne'}
+              </span>
+              <span className="font-mono text-xs text-slate-500">Réf : {mail.reference}</span>
+            </div>
             <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">{mail.subject}</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300 max-w-3xl">{mail.description}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 max-w-4xl leading-relaxed">{mail.description}</p>
           </div>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs shrink-0">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs shrink-0 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
             <div>
-              <span className="text-slate-400 block">Expéditeur</span>
-              <span className="font-medium">{mail.sender_org || mail.sender_name || 'Interne'}</span>
+              <span className="text-slate-400 block font-medium">Expéditeur</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{mail.sender_org || mail.sender_name || 'Interne'}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Destinataire</span>
-              <span className="font-medium">{mail.recipient_name || mail.recipient_org || 'Organisation'}</span>
+              <span className="text-slate-400 block font-medium">Destinataire</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{mail.recipient_name || mail.recipient_org || 'Organisation'}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Service actuel</span>
-              <span className="font-medium">{mail.service_name || 'Non affecté'}</span>
+              <span className="text-slate-400 block font-medium">Service actuel</span>
+              <span className="font-semibold text-blue-700 dark:text-blue-400">{mail.service_name || 'Non affecté'}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Agent affecté</span>
-              <span className="font-medium">{mail.assigned_agent_name || 'En attente'}</span>
+              <span className="text-slate-400 block font-medium">Agent affecté</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{mail.assigned_agent_name || 'En attente'}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Réception</span>
-              <span className="font-mono">{mail.received_at.slice(0, 10)}</span>
+              <span className="text-slate-400 block font-medium">Réception</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{mail.received_at.slice(0, 10)}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Échéance</span>
-              <span className="font-mono">{mail.due_date || 'Non fixée'}</span>
+              <span className="text-slate-400 block font-medium">Échéance</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{mail.due_date || 'Non fixée'}</span>
             </div>
           </div>
         </div>
+
+        {/* Visualisation directe du document courrier scanné / original */}
+        {documents.some((d) => d.doc_kind === 'ORIGINAL') && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            {(() => {
+              const origDoc = documents.find((d) => d.doc_kind === 'ORIGINAL')!;
+              const isOpened = previewDocId === origDoc.id;
+              return (
+                <div className="w-full flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Courrier original numérisé ({origDoc.filename})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleDocPreview(origDoc.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors border border-blue-200 dark:border-blue-900"
+                      >
+                        {isOpened ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{isOpened ? 'Masquer le courrier numérisé' : 'Afficher le courrier numérisé'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadAuthenticatedFile(`/api/documents/${origDoc.id}/file`, origDoc.filename)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Télécharger</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {isOpened && (
+                    <div className="mt-2 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-900 shadow-inner">
+                      {docLoadingId === origDoc.id ? (
+                        <div className="p-8 text-center text-xs text-white">Chargement du document...</div>
+                      ) : docBlobUrls[origDoc.id] ? (
+                        origDoc.mime_type === 'application/pdf' ? (
+                          <iframe
+                            src={docBlobUrls[origDoc.id]}
+                            title={origDoc.filename}
+                            className="w-full h-[650px] border-0"
+                          />
+                        ) : (
+                          <div className="p-4 flex justify-center bg-slate-800">
+                            <img
+                              src={docBlobUrls[origDoc.id]}
+                              alt={origDoc.filename}
+                              className="max-h-[700px] object-contain rounded"
+                            />
+                          </div>
+                        )
+                      ) : (
+                        <div className="p-8 text-center text-xs text-slate-400">
+                          Cliquez pour charger la prévisualisation du document.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Visual Workflow Progression */}
@@ -1839,6 +1920,18 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                 <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line pt-2 border-t border-slate-100 dark:border-slate-800">
                   {aiAnalyses[0].detailed_summary}
                 </p>
+              )}
+              {aiAnalyses[0].ocr_text && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <details className="text-xs text-slate-600 dark:text-slate-300">
+                    <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-400 hover:underline">
+                      📄 Afficher le texte intégral extrait par OCR du courrier
+                    </summary>
+                    <div className="mt-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 max-h-60 overflow-y-auto font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
+                      {aiAnalyses[0].ocr_text}
+                    </div>
+                  </details>
+                </div>
               )}
               {aiAnalyses[0].validated_by_name && (
                 <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
