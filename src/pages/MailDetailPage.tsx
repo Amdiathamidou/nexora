@@ -622,15 +622,24 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
 
   const insertSignatureInDraft = (sigUrl: string, name: string, title?: string) => {
     const signatureBlock = `
-      <div style="margin-top: 30px; margin-bottom: 20px; page-break-inside: avoid; display: inline-block; min-width: 240px; text-align: left;">
+      <div style="margin-top: 24px; margin-bottom: 16px; page-break-inside: avoid; display: inline-block; min-width: 220px; max-width: 100%; text-align: left;">
         <p style="font-size: 13px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">${title || 'Le Responsable'}</p>
         <img src="${sigUrl}" alt="Signature" style="max-height: 80px; max-width: 220px; object-fit: contain; display: block; margin-bottom: 6px;" />
         <p style="font-size: 12px; font-weight: 600; color: #334155; margin: 0;">${name}</p>
       </div>
     `;
-    document.execCommand('insertHTML', false, signatureBlock);
-    draftEditorRef.current?.focus();
-    handleDraftInput();
+    const editor = draftEditorRef.current;
+    if (editor) {
+      editor.focus();
+      const sel = window.getSelection();
+      const isInsideEditor = sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode);
+      if (isInsideEditor) {
+        document.execCommand('insertHTML', false, signatureBlock);
+      } else {
+        editor.innerHTML = (editor.innerHTML || '') + signatureBlock;
+      }
+      handleDraftInput();
+    }
   };
 
   const insertDateInDraft = () => {
@@ -2304,8 +2313,8 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                   contentEditable={actionLock.canAct}
                   suppressContentEditableWarning
                   onInput={handleDraftInput}
-                  style={{ fontFamily: editorFontFamily }}
-                  className={`w-full max-w-[800px] min-h-[500px] p-8 sm:p-12 bg-white dark:bg-slate-900 shadow-md border border-slate-300 dark:border-slate-700 rounded-sm text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                  style={{ fontFamily: editorFontFamily, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                  className={`w-full max-w-[800px] min-h-[500px] p-8 sm:p-12 bg-white dark:bg-slate-900 shadow-md border border-slate-300 dark:border-slate-700 rounded-sm text-sm text-slate-900 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 break-words overflow-x-hidden ${
                     !actionLock.canAct ? 'opacity-85 cursor-not-allowed' : ''
                   }`}
                   dangerouslySetInnerHTML={{ __html: draftHtml }}

@@ -173,6 +173,16 @@ export async function startWorkflowForMail(args: {
         }
       }
 
+      const resolvedStepType =
+        st.stepType ||
+        (st.mode === 'PARALLEL'
+          ? 'PARALLEL_REVIEW'
+          : st.targetRole === 'PRESIDENT'
+          ? 'PRESIDENT_VALIDATION'
+          : st.targetRole === 'RESPONSABLE'
+          ? 'RESPONSABLE_REVIEW'
+          : 'AGENT_TREATMENT');
+
       db.prepare(`
         INSERT INTO workflow_step_executions (
           id, workflow_instance_id, mail_id, company_id, step_order, step_name, step_type, mode,
@@ -185,7 +195,7 @@ export async function startWorkflowForMail(args: {
         companyId,
         st.stepOrder ?? i + 1,
         st.name || (st as any).title || `Étape ${i + 1}`,
-        st.stepType || (st.mode === 'PARALLEL' ? 'PARALLEL_REVIEW' : 'AGENT_TREATMENT'),
+        resolvedStepType,
         st.mode,
         isFirst ? 'EN_COURS' : 'EN_ATTENTE',
         stepServiceId,
