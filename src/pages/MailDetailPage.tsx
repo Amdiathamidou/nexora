@@ -162,7 +162,15 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
   const [decisionNote, setDecisionNote] = useState('');
   const [commentText, setCommentText] = useState('');
   const [commentType, setCommentType] = useState('OBSERVATION');
-  const [dispatchForm, setDispatchForm] = useState({ dispatchMode: 'COURSIER', trackingRef: '', recipientDetails: '', notes: '' });
+  const [dispatchForm, setDispatchForm] = useState({
+    dispatchMode: 'COURSIER',
+    trackingRef: '',
+    recipientDetails: '',
+    destinationAddress: '',
+    shippingCost: '',
+    shipmentStatus: 'EXPEDIE',
+    notes: '',
+  });
   const [docKind, setDocKind] = useState('PROJET_REPONSE');
 
   // President Signature & Stamp state
@@ -1813,10 +1821,10 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
               {/* Secretariat Final Dispatch & Archive Controls ONLY when canDispatchOrArchive */}
               {actionLock.canDispatchOrArchive && (
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
-                  <form onSubmit={handleDispatch} className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
-                    <p className="text-xs font-semibold flex items-center gap-1.5">
+                  <form onSubmit={handleDispatch} className="p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/60 space-y-3">
+                    <p className="text-xs font-bold flex items-center gap-1.5 text-indigo-900 dark:text-indigo-200">
                       <Send className="w-4 h-4 text-indigo-600" />
-                      <span>Contrôle final Secrétariat &amp; Enregistrement de l’expédition</span>
+                      <span>Fiche d’Expédition Officielle &amp; Contrôle Final Secrétariat</span>
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <select
@@ -1826,24 +1834,57 @@ export function MailDetailPage({ mailId, onNavigate }: MailDetailPageProps) {
                       >
                         <option value="COURSIER">Coursier / Bordereau</option>
                         <option value="POSTE">Poste recommandée</option>
-                        <option value="EMAIL">E-mail officiel</option>
-                        <option value="REMISE_MAIN_PROPRE">Remise en main propre</option>
+                        <option value="EMAIL">Transmission électronique (E-mail)</option>
+                        <option value="REMISE_MAIN_PROPRE">Dépôt direct / Remise en main propre</option>
+                        <option value="TRANSPORTEUR">Transporteur express</option>
                       </select>
                       <input
                         type="text"
-                        placeholder="N° preuve / suivi..."
+                        placeholder="N° suivi / Bordereau..."
                         value={dispatchForm.trackingRef}
                         onChange={(e) => setDispatchForm({ ...dispatchForm, trackingRef: e.target.value })}
                         className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
                       />
+                      <select
+                        value={dispatchForm.shipmentStatus}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, shipmentStatus: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      >
+                        <option value="EXPEDIE">Expédié</option>
+                        <option value="EN_ACHEMINEMENT">En cours d'acheminement</option>
+                        <option value="LIVRE">Livré (avec preuve)</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input
                         type="text"
-                        placeholder="Destinataire / Notes..."
-                        value={dispatchForm.notes}
-                        onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
+                        placeholder="Destinataire / Organisation..."
+                        value={dispatchForm.recipientDetails}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, recipientDetails: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Adresse de destination..."
+                        value={dispatchForm.destinationAddress}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, destinationAddress: e.target.value })}
+                        className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Frais d'expédition (FCFA)"
+                        value={dispatchForm.shippingCost}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, shippingCost: e.target.value })}
                         className="px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                       />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="Observations d'expédition..."
+                      value={dispatchForm.notes}
+                      onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="submit"
